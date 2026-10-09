@@ -36,6 +36,41 @@ export default function PropertiesPanel() {
           />
         </div>
 
+        {/* Transform */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 8 }}>
+          <div className="prop-row" style={{ marginBottom: 0 }}>
+            <span className="prop-label">X</span>
+            <input type="number" className="prop-input" value={Math.round(layer.x)}
+              onChange={(e) => { layer.x = parseInt(e.target.value) || 0; }} />
+          </div>
+          <div className="prop-row" style={{ marginBottom: 0 }}>
+            <span className="prop-label">Y</span>
+            <input type="number" className="prop-input" value={Math.round(layer.y)}
+              onChange={(e) => { layer.y = parseInt(e.target.value) || 0; }} />
+          </div>
+          <div className="prop-row" style={{ marginBottom: 0 }}>
+            <span className="prop-label">W</span>
+            <input type="number" className="prop-input" value={Math.round(layer.width)}
+              onChange={(e) => { layer.width = Math.max(1, parseInt(e.target.value) || 1); }} />
+          </div>
+          <div className="prop-row" style={{ marginBottom: 0 }}>
+            <span className="prop-label">H</span>
+            <input type="number" className="prop-input" value={Math.round(layer.height)}
+              onChange={(e) => { layer.height = Math.max(1, parseInt(e.target.value) || 1); }} />
+          </div>
+        </div>
+        <div className="prop-row">
+          <span className="prop-label">Angle</span>
+          <input type="range" className="prop-slider" min={-180} max={180} value={layer.rotation || 0}
+            onChange={(e) => useEditorStore.getState().setLayerRotation(layer.id, parseInt(e.target.value))} />
+          <span className="prop-value">{layer.rotation || 0}°</span>
+        </div>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          <button className="btn" style={{ flex: 1, fontSize: 10, padding: '3px' }} onClick={() => useEditorStore.getState().flipLayer('horizontal')}>Flip H</button>
+          <button className="btn" style={{ flex: 1, fontSize: 10, padding: '3px' }} onClick={() => useEditorStore.getState().flipLayer('vertical')}>Flip V</button>
+          <button className="btn" style={{ flex: 1, fontSize: 10, padding: '3px' }} onClick={() => useEditorStore.getState().rotateLayer(90)}>Rot 90°</button>
+        </div>
+
         {layer.type === 'text' && (
           <>
             <div className="prop-row">

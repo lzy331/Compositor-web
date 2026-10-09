@@ -259,6 +259,110 @@ function hslToRgbLocal(h: number, s: number, l: number): { r: number; g: number;
   return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
 }
 
+// Magic wand: create a selection mask of connected same-color pixels
+export function magicWandSelect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  tolerance = 32,
+  contiguous = true
+): { x: number; y: number; width: number; height: number; mask: ImageData } | null {
+  const canvas = ctx.canvas;
+  const w = canvas.width;
+  const h = canvas.height;
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  const startIdx = (y * w + x) * 4;
+  const sr = data[startIdx], sg = data[startIdx + 1], sb = data[startIdx + 2], sa = data[startIdx + 3];
+  if (sa === 0) return null;
+
+  const mask = new Uint8ClampedArray(w * h);
+  let minX = w, minY = h, maxX = 0, maxY = 0;
+
+  const match = (idx: number) =>
+    Math.abs(data[idx] - sr) <= tolerance &&
+    Math.abs(data[idx + 1] - sg) <= tolerance &&
+    Math.abs(data[idx + 2] - sb) <= tolerance &&
+    data[idx + 3] > 10;
+
+  if (contiguous) {
+    const stack: [number, number][] = [[x, y]];
+    while (stack.length) {
+      const [cx, cy] = stack.pop()!;
+      if (cx < 0 || cx >= w || cy < 0 || cy >= h) continue;
+      const mi = cy * w + cx;
+      if (mask[mi]) continue;
+      if (!match(mi * 4)) continue;
+      mask[mi] = 255;
+      if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
+      if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
+      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+  } else {
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        if (match((py * w + px) * 4)) {
+          mask[py * w + px] = 255;
+          if (px < minX) minX = px; if (px > maxX) maxX = px;
+          if (py < minY) minY = py; if (py > maxY) maxY = py;
+        }
+      }
+    }
+  }
+
+  if (maxX < minX) return null;
+  const selW = maxX - minX + 1;
+  const selH = maxY - minY + 1;
+  const maskData = new ImageData(selW, selH);
+  for (let py = 0; py < selH; py++) {
+    for (let px = 0; px < selW; px++) {
+      const srcIdx = ((minY + py) * w + (minX + px));
+      const dstIdx = (py * selW + px) * 4;
+      const v = mask[srcIdx];
+      maskData.data[dstIdx] = v;
+      maskData.data[dstIdx + 1] = v;
+      maskData.data[dstIdx + 2] = v;
+      maskData.data[dstIdx + 3] = v;
+    }
+  }
+  return { x: minX, y: minY, width: selW, height: selH, mask: maskData };
+}
+
+// Feather a selection mask by radius pixels
+export function featherMask(mask: ImageData, radius: number): ImageData {
+  if (radius <= 0) return mask;
+  const w = mask.width, h = mask.height;
+  const result = new ImageData(new Uint8ClampedArray(mask.data), w, h);
+  const box = Math.max(1, Math.floor(radius));
+  const temp = new Uint8ClampedArray(result.data.length);
+
+  // Horizontal pass
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, count = 0;
+      for (let dx = -box; dx <= box; dx++) {
+        const px = Math.min(w - 1, Math.max(0, x + dx));
+        sum += result.data[(y * w + px) * 4];
+        count++;
+      }
+      temp[(y * w + x) * 4] = sum / count;
+    }
+  }
+  // Vertical pass
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, count = 0;
+      for (let dy = -box; dy <= box; dy++) {
+        const py = Math.min(h - 1, Math.max(0, y + dy));
+        sum += temp[(py * w + x) * 4];
+        count++;
+      }
+      const idx = (y * w + x) * 4;
+      result.data[idx] = result.data[idx + 1] = result.data[idx + 2] = result.data[idx + 3] = sum / count;
+    }
+  }
+  return result;
+}
+
 // Flood fill for paint bucket tool
 export function floodFill(
   ctx: CanvasRenderingContext2D,

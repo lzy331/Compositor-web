@@ -60,6 +60,11 @@ function createDefaultProject(width = 800, height = 600, name = 'Untitled'): Pro
     mask: null,
     maskEnabled: false,
     type: 'pixel',
+    rotation: 0,
+    scaleX: 1,
+    scaleY: 1,
+    flippedH: false,
+    flippedV: false,
   };
 
   return {
@@ -73,6 +78,7 @@ function createDefaultProject(width = 800, height = 600, name = 'Untitled'): Pro
     zoom: 1,
     panX: 0,
     panY: 0,
+    guides: [],
   };
 }
 
@@ -134,6 +140,10 @@ interface StoreActions {
   toggleRulers: () => void;
   toggleGrid: () => void;
   setGridSize: (size: number) => void;
+  toggleFullscreen: () => void;
+  toggleNavigator: () => void;
+  setDialog: (type: AppState['dialog']['type']) => void;
+  setCommandPaletteOpen: (open: boolean) => void;
 
   // Canvas
   setZoom: (zoom: number) => void;
@@ -142,6 +152,33 @@ interface StoreActions {
   // Clipboard
   copyLayer: (id: string) => void;
   pasteLayer: () => void;
+
+  // Transform
+  beginTransform: () => void;
+  updateTransform: (handle: string, dx: number, dy: number) => void;
+  applyTransform: () => void;
+  cancelTransform: () => void;
+  flipLayer: (axis: 'horizontal' | 'vertical') => void;
+  flipCanvas: (axis: 'horizontal' | 'vertical') => void;
+  rotateLayer: (degrees: number) => void;
+
+  // Crop
+  beginCrop: () => void;
+  setCropRatio: (ratio: string | null) => void;
+  applyCrop: () => void;
+  cancelCrop: () => void;
+
+  // Guides
+  addGuide: (orientation: 'horizontal' | 'vertical', position: number) => void;
+  removeGuide: (id: string) => void;
+  clearGuides: () => void;
+
+  // Layer effects
+  setLayerEffect: (layerId: string, effect: Partial<LayerData['effects']>) => void;
+
+  // Layer transform properties
+  setLayerRotation: (layerId: string, rotation: number) => void;
+  setLayerScale: (layerId: string, sx: number, sy: number) => void;
 }
 
 export const useEditorStore = create<AppState & StoreActions>()(
@@ -156,6 +193,12 @@ export const useEditorStore = create<AppState & StoreActions>()(
     showRulers: true,
     showGrid: false,
     gridSize: 50,
+    fullscreen: false,
+    showNavigator: false,
+    transform: null,
+    crop: null,
+    dialog: { type: null },
+    commandPaletteOpen: false,
     panels: { layers: true, properties: true, history: true },
     keyboardShortcuts: DEFAULT_SHORTCUTS,
 
@@ -213,6 +256,11 @@ export const useEditorStore = create<AppState & StoreActions>()(
         mask: null,
         maskEnabled: false,
         type,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        flippedH: false,
+        flippedV: false,
       };
       if (type === 'text') {
         layer.text = 'Text';
@@ -462,6 +510,179 @@ export const useEditorStore = create<AppState & StoreActions>()(
       const activeIdx = p.layers.findIndex((l: any) => l.id === p.activeLayerId);
       p.layers.splice(activeIdx + 1, 0, copy);
       p.activeLayerId = copy.id;
+    }),
+
+    toggleFullscreen: () => set((state: any) => { state.fullscreen = !state.fullscreen; }),
+    toggleNavigator: () => set((state: any) => { state.showNavigator = !state.showNavigator; }),
+    setDialog: (type) => set((state: any) => { state.dialog = { type }; }),
+    setCommandPaletteOpen: (open) => set((state: any) => { state.commandPaletteOpen = open; }),
+
+    beginTransform: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.activeLayerId) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (!layer) return;
+      state.transform = {
+        active: true,
+        handle: null,
+        startX: 0, startY: 0,
+        origX: layer.x, origY: layer.y,
+        origW: layer.width, origH: layer.height,
+        origRotation: layer.rotation || 0,
+        origScaleX: layer.scaleX || 1,
+        origScaleY: layer.scaleY || 1,
+      };
+    }),
+
+    updateTransform: (handle, dx, dy) => set((state: any) => {
+      if (!state.transform?.active) return;
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.activeLayerId) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (!layer) return;
+      const t = state.transform;
+
+      if (handle === 'move') {
+        layer.x = t.origX + dx;
+        layer.y = t.origY + dy;
+      } else if (handle === 'rotate') {
+        const cx = t.origX + t.origW / 2;
+        const cy = t.origY + t.origH / 2;
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        layer.rotation = Math.round(angle);
+      } else {
+        // Scale handles
+        let newW = t.origW, newH = t.origH, newX = t.origX, newY = t.origY;
+        if (handle.includes('e')) newW = Math.max(1, t.origW + dx);
+        if (handle.includes('w')) { newW = Math.max(1, t.origW - dx); newX = t.origX + dx; }
+        if (handle.includes('s')) newH = Math.max(1, t.origH + dy);
+        if (handle.includes('n')) { newH = Math.max(1, t.origH - dy); newY = t.origY + dy; }
+        layer.x = newX; layer.y = newY;
+        layer.width = newW; layer.height = newH;
+      }
+    }),
+
+    applyTransform: () => set((state: any) => { state.transform = null; }),
+    cancelTransform: () => set((state: any) => { state.transform = null; }),
+
+    flipLayer: (axis) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.activeLayerId) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (!layer?.canvas) return;
+      const ctx = layer.canvas.getContext('2d')!;
+      const w = layer.canvas.width, h = layer.canvas.height;
+      const temp = createCanvas(w, h);
+      const tctx = temp.getContext('2d')!;
+      tctx.save();
+      if (axis === 'horizontal') { tctx.translate(w, 0); tctx.scale(-1, 1); }
+      else { tctx.translate(0, h); tctx.scale(1, -1); }
+      tctx.drawImage(layer.canvas, 0, 0);
+      tctx.restore();
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(temp, 0, 0);
+    }),
+
+    flipCanvas: (axis) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      for (const layer of p.layers) {
+        if (!layer.canvas) continue;
+        const ctx = layer.canvas.getContext('2d')!;
+        const w = layer.canvas.width, h = layer.canvas.height;
+        const temp = createCanvas(w, h);
+        const tctx = temp.getContext('2d')!;
+        tctx.save();
+        if (axis === 'horizontal') { tctx.translate(w, 0); tctx.scale(-1, 1); }
+        else { tctx.translate(0, h); tctx.scale(1, -1); }
+        tctx.drawImage(layer.canvas, 0, 0);
+        tctx.restore();
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(temp, 0, 0);
+      }
+    }),
+
+    rotateLayer: (degrees) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.activeLayerId) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (!layer) return;
+      layer.rotation = ((layer.rotation || 0) + degrees) % 360;
+    }),
+
+    beginCrop: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      state.crop = {
+        active: true,
+        x: Math.round(p.width * 0.1),
+        y: Math.round(p.height * 0.1),
+        width: Math.round(p.width * 0.8),
+        height: Math.round(p.height * 0.8),
+        ratio: null,
+      };
+    }),
+
+    setCropRatio: (ratio) => set((state: any) => {
+      if (state.crop) state.crop.ratio = ratio;
+    }),
+
+    applyCrop: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !state.crop) return;
+      const c = state.crop;
+      // Resize all layers and canvas
+      for (const layer of p.layers) {
+        if (!layer.canvas) continue;
+        const cropped = createCanvas(c.width, c.height);
+        cropped.getContext('2d')!.drawImage(layer.canvas, c.x, c.y, c.width, c.height, 0, 0, c.width, c.height);
+        layer.canvas = cropped;
+        layer.x = Math.max(0, layer.x - c.x);
+        layer.y = Math.max(0, layer.y - c.y);
+        layer.width = c.width;
+        layer.height = c.height;
+      }
+      p.width = c.width;
+      p.height = c.height;
+      state.crop = null;
+    }),
+
+    cancelCrop: () => set((state: any) => { state.crop = null; }),
+
+    addGuide: (orientation, position) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      p.guides.push({ id: uid(), orientation, position });
+    }),
+
+    removeGuide: (id) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      p.guides = p.guides.filter((g: any) => g.id !== id);
+    }),
+
+    clearGuides: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (p) p.guides = [];
+    }),
+
+    setLayerEffect: (layerId, effect) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      const layer = p?.layers.find((l: any) => l.id === layerId);
+      if (!layer) return;
+      layer.effects = { ...(layer.effects || {}), ...effect };
+    }),
+
+    setLayerRotation: (layerId, rotation) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      const layer = p?.layers.find((l: any) => l.id === layerId);
+      if (layer) layer.rotation = rotation;
+    }),
+
+    setLayerScale: (layerId, sx, sy) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      const layer = p?.layers.find((l: any) => l.id === layerId);
+      if (layer) { layer.scaleX = sx; layer.scaleY = sy; }
     }),
   }))
 );

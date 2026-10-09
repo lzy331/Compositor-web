@@ -122,6 +122,34 @@ export default function ToolOptions() {
           />
         </label>
       )}
+      {tool.id === 'gradient' && (
+        <>
+          <label>
+            Type
+            <select
+              value={tool.gradientType}
+              onChange={(e) => setTool({ gradientType: e.target.value as any })}
+              style={{ background: '#1a1a1a', border: '1px solid #444', color: '#e0e0e0', borderRadius: 3, fontSize: 11, padding: '2px 4px' }}
+            >
+              <option value="linear">Linear</option>
+              <option value="radial">Radial</option>
+            </select>
+          </label>
+          <label>
+            Color
+            <input
+              type="color"
+              value={tool.brushColor}
+              onChange={(e) => setTool({ brushColor: e.target.value })}
+              style={{ width: 30, height: 22, border: 'none', background: 'none', cursor: 'pointer' }}
+            />
+          </label>
+          <span style={{ fontSize: 10, color: '#888' }}>Drag on canvas to draw gradient</span>
+        </>
+      )}
+      {tool.id === 'crop' && (
+        <span style={{ fontSize: 10, color: '#888' }}>Drag on canvas to define crop area, then press Enter or Apply</span>
+      )}
     </div>
   );
 }

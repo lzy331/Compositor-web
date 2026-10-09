@@ -29,37 +29,79 @@ export function renderLayer(layer: LayerData, ctx: CanvasRenderingContext2D): vo
   ctx.globalAlpha = layer.opacity / 100;
   applyBlendMode(ctx, layer.blendMode);
 
+  const cx = layer.x + layer.width / 2;
+  const cy = layer.y + layer.height / 2;
+  const rotation = (layer.rotation || 0) * Math.PI / 180;
+  const sx = layer.scaleX || 1;
+  const sy = layer.scaleY || 1;
+  const fh = layer.flippedH ? -1 : 1;
+  const fv = layer.flippedV ? -1 : 1;
+
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.scale(sx * fh, sy * fv);
+  ctx.translate(-layer.width / 2, -layer.height / 2);
+
+  // Render drop shadow effect
+  if (layer.effects?.dropShadow?.enabled && layer.canvas) {
+    const ds = layer.effects.dropShadow;
+    ctx.save();
+    ctx.shadowColor = ds.color;
+    ctx.shadowBlur = ds.blur;
+    ctx.shadowOffsetX = ds.offsetX;
+    ctx.shadowOffsetY = ds.offsetY;
+    ctx.globalAlpha = (layer.opacity / 100) * (ds.opacity / 100);
+    ctx.drawImage(layer.canvas, 0, 0);
+    ctx.restore();
+  }
+
   if (layer.type === 'pixel' && layer.canvas) {
     if (layer.mask && layer.maskEnabled) {
-      // Render with mask: use temporary canvas
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = layer.width;
       tempCanvas.height = layer.height;
       const tempCtx = tempCanvas.getContext('2d')!;
       tempCtx.drawImage(layer.canvas, 0, 0);
-      // Apply mask
       tempCtx.globalCompositeOperation = 'destination-in';
       tempCtx.drawImage(layer.mask, 0, 0);
-      ctx.drawImage(tempCanvas, layer.x, layer.y);
+      ctx.drawImage(tempCanvas, 0, 0);
     } else {
-      ctx.drawImage(layer.canvas, layer.x, layer.y);
+      ctx.drawImage(layer.canvas, 0, 0);
+    }
+    // Stroke effect
+    if (layer.effects?.stroke?.enabled) {
+      const st = layer.effects.stroke;
+      ctx.save();
+      ctx.strokeStyle = st.color;
+      ctx.lineWidth = st.width;
+      ctx.strokeRect(0, 0, layer.width, layer.height);
+      ctx.restore();
+    }
+    // Color overlay
+    if (layer.effects?.colorOverlay?.enabled) {
+      const co = layer.effects.colorOverlay;
+      ctx.save();
+      ctx.globalAlpha = (layer.opacity / 100) * (co.opacity / 100);
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = co.color;
+      ctx.fillRect(0, 0, layer.width, layer.height);
+      ctx.restore();
     }
   } else if (layer.type === 'text') {
-    renderTextLayer(layer, ctx);
+    renderTextLayer(layer, ctx, true);
   } else if (layer.type === 'shape') {
-    renderShapeLayer(layer, ctx);
+    renderShapeLayer(layer, ctx, true);
   } else if (layer.type === 'gradient') {
-    renderGradientLayer(layer, ctx);
-  } else if (layer.type === 'adjustment' && layer.adjustment) {
-    // Adjustment layers are handled during compositing
-    // For now, skip in individual render
+    renderGradientLayer(layer, ctx, true);
   }
 
   ctx.restore();
 }
 
-function renderTextLayer(layer: LayerData, ctx: CanvasRenderingContext2D): void {
+function renderTextLayer(layer: LayerData, ctx: CanvasRenderingContext2D, local = false): void {
   if (!layer.text) return;
+  const ox = local ? 0 : layer.x;
+  const oy = local ? 0 : layer.y;
   ctx.save();
   ctx.font = `${layer.fontSize || 24}px ${layer.fontFamily || 'Arial'}`;
   ctx.fillStyle = layer.textColor || '#000000';
@@ -67,25 +109,28 @@ function renderTextLayer(layer: LayerData, ctx: CanvasRenderingContext2D): void 
   ctx.textBaseline = 'top';
   const lines = layer.text.split('\n');
   const lineHeight = (layer.fontSize || 24) * 1.2;
-  let startX = layer.x;
+  let startX = ox;
   if (layer.textAlign === 'center') startX += layer.width / 2;
   else if (layer.textAlign === 'right') startX += layer.width;
   lines.forEach((line, i) => {
-    ctx.fillText(line, startX, layer.y + i * lineHeight);
+    ctx.fillText(line, startX, oy + i * lineHeight);
   });
   ctx.restore();
 }
 
-function renderShapeLayer(layer: LayerData, ctx: CanvasRenderingContext2D): void {
+function renderShapeLayer(layer: LayerData, ctx: CanvasRenderingContext2D, local = false): void {
+  const ox = local ? 0 : layer.x;
+  const oy = local ? 0 : layer.y;
   ctx.save();
   ctx.beginPath();
-  const x = layer.x, y = layer.y, w = layer.width, h = layer.height;
+  const w = layer.width, h = layer.height;
   switch (layer.shapeType) {
     case 'rect':
-      ctx.rect(x, y, w, h);
+      ctx.rect(ox, oy, w, h);
       break;
     case 'rounded-rect': {
       const r = layer.borderRadius || 10;
+      const x = ox, y = oy;
       ctx.moveTo(x + r, y);
       ctx.arcTo(x + w, y, x + w, y + h, r);
       ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -95,11 +140,11 @@ function renderShapeLayer(layer: LayerData, ctx: CanvasRenderingContext2D): void
       break;
     }
     case 'ellipse':
-      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(ox + w / 2, oy + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
       break;
     case 'line':
-      ctx.moveTo(x, y + h / 2);
-      ctx.lineTo(x + w, y + h / 2);
+      ctx.moveTo(ox, oy + h / 2);
+      ctx.lineTo(ox + w, oy + h / 2);
       break;
   }
   if (layer.shapeFill && layer.shapeFill !== 'transparent') {
@@ -114,14 +159,16 @@ function renderShapeLayer(layer: LayerData, ctx: CanvasRenderingContext2D): void
   ctx.restore();
 }
 
-function renderGradientLayer(layer: LayerData, ctx: CanvasRenderingContext2D): void {
+function renderGradientLayer(layer: LayerData, ctx: CanvasRenderingContext2D, local = false): void {
   if (!layer.gradient) return;
+  const ox = local ? 0 : layer.x;
+  const oy = local ? 0 : layer.y;
   const grad = layer.gradient;
   let gradient: CanvasGradient;
   if (grad.type === 'linear') {
     const angle = (grad.angle * Math.PI) / 180;
-    const cx = layer.x + layer.width / 2;
-    const cy = layer.y + layer.height / 2;
+    const cx = ox + layer.width / 2;
+    const cy = oy + layer.height / 2;
     const len = Math.max(layer.width, layer.height);
     const x0 = cx - Math.cos(angle) * len / 2;
     const y0 = cy - Math.sin(angle) * len / 2;
@@ -129,13 +176,13 @@ function renderGradientLayer(layer: LayerData, ctx: CanvasRenderingContext2D): v
     const y1 = cy + Math.sin(angle) * len / 2;
     gradient = ctx.createLinearGradient(x0, y0, x1, y1);
   } else {
-    const cx = layer.x + layer.width / 2;
-    const cy = layer.y + layer.height / 2;
+    const cx = ox + layer.width / 2;
+    const cy = oy + layer.height / 2;
     gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(layer.width, layer.height) / 2);
   }
   grad.colors.forEach((c) => gradient.addColorStop(c.stop, c.color));
   ctx.fillStyle = gradient;
-  ctx.fillRect(layer.x, layer.y, layer.width, layer.height);
+  ctx.fillRect(ox, oy, layer.width, layer.height);
 }
 
 // Render layer thumbnail for the layers panel

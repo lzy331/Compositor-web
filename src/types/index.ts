@@ -7,6 +7,29 @@ export type BlendMode =
   | 'linear-burn' | 'vivid-light' | 'linear-light' | 'pin-light' | 'hard-mix'
   | 'subtract' | 'divide';
 
+export interface LayerEffects {
+  dropShadow?: {
+    enabled: boolean;
+    offsetX: number;
+    offsetY: number;
+    blur: number;
+    spread: number;
+    color: string;
+    opacity: number;
+  };
+  stroke?: {
+    enabled: boolean;
+    width: number;
+    color: string;
+    position: 'outside' | 'inside' | 'center';
+  };
+  colorOverlay?: {
+    enabled: boolean;
+    color: string;
+    opacity: number;
+  };
+}
+
 export interface LayerData {
   id: string;
   name: string;
@@ -22,6 +45,12 @@ export interface LayerData {
   mask: HTMLCanvasElement | null;
   maskEnabled: boolean;
   type: 'pixel' | 'text' | 'shape' | 'adjustment' | 'gradient';
+  rotation: number; // degrees
+  scaleX: number;
+  scaleY: number;
+  flippedH: boolean;
+  flippedV: boolean;
+  effects?: LayerEffects;
   // For text layers
   text?: string;
   fontSize?: number;
@@ -53,6 +82,35 @@ export interface GradientSettings {
   scale: number;
 }
 
+export interface Guide {
+  id: string;
+  orientation: 'horizontal' | 'vertical';
+  position: number; // in document pixels
+}
+
+export interface TransformState {
+  active: boolean;
+  handle: string | null; // 'nw','n','ne','e','se','s','sw','w','rotate','move'
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+  origW: number;
+  origH: number;
+  origRotation: number;
+  origScaleX: number;
+  origScaleY: number;
+}
+
+export interface CropState {
+  active: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  ratio: string | null; // 'free','1:1','3:4','4:3','9:16','16:9'
+}
+
 export interface ProjectState {
   id: string;
   name: string;
@@ -64,6 +122,36 @@ export interface ProjectState {
   zoom: number;
   panX: number;
   panY: number;
+  guides: Guide[];
+}
+
+export interface DialogState {
+  type: 'levels' | 'curves' | 'hsl' | 'imageSize' | 'canvasSize' | 'new' | null;
+}
+
+export interface AppState {
+  projects: ProjectState[];
+  activeProjectId: string | null;
+  tool: ToolState;
+  selection: Selection | null;
+  history: HistoryEntry[];
+  historyIndex: number;
+  clipboard: LayerData | null;
+  showRulers: boolean;
+  showGrid: boolean;
+  gridSize: number;
+  fullscreen: boolean;
+  showNavigator: boolean;
+  transform: TransformState | null;
+  crop: CropState | null;
+  dialog: DialogState;
+  commandPaletteOpen: boolean;
+  panels: {
+    layers: boolean;
+    properties: boolean;
+    history: boolean;
+  };
+  keyboardShortcuts: Record<string, string>;
 }
 
 export interface Selection {
@@ -101,23 +189,4 @@ export interface ToolState {
 export interface HistoryEntry {
   layers: LayerData[];
   description: string;
-}
-
-export interface AppState {
-  projects: ProjectState[];
-  activeProjectId: string | null;
-  tool: ToolState;
-  selection: Selection | null;
-  history: HistoryEntry[];
-  historyIndex: number;
-  clipboard: LayerData | null;
-  showRulers: boolean;
-  showGrid: boolean;
-  gridSize: number;
-  panels: {
-    layers: boolean;
-    properties: boolean;
-    history: boolean;
-  };
-  keyboardShortcuts: Record<string, string>;
 }

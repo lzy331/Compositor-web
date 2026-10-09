@@ -32,6 +32,15 @@ const MENUS: { label: string; items: { label: string; shortcut?: string; action?
       { divider: true, label: '' },
       { label: 'Merge Down', shortcut: 'Ctrl+E', action: 'mergeDown' },
       { label: 'Add Layer Mask', action: 'addMask' },
+      { divider: true, label: '' },
+      { label: 'Flip Horizontal', action: 'flipH' },
+      { label: 'Flip Vertical', action: 'flipV' },
+      { label: 'Rotate 90° CW', action: 'rotateCW' },
+      { label: 'Rotate 90° CCW', action: 'rotateCCW' },
+      { divider: true, label: '' },
+      { label: 'Layer Style › Drop Shadow', action: 'fx-shadow' },
+      { label: 'Layer Style › Stroke', action: 'fx-stroke' },
+      { label: 'Layer Style › Color Overlay', action: 'fx-overlay' },
     ],
   },
   {
@@ -40,15 +49,18 @@ const MENUS: { label: string; items: { label: string; shortcut?: string; action?
       { label: 'Image Size...', action: 'imageSize' },
       { label: 'Canvas Size...', action: 'canvasSize' },
       { divider: true, label: '' },
-      { label: 'Adjustments › Levels', action: 'adjust-levels' },
-      { label: 'Adjustments › Curves', action: 'adjust-curves' },
-      { label: 'Adjustments › Hue/Saturation', action: 'adjust-hsl' },
+      { label: 'Adjustments › Levels', action: 'dialog-levels' },
+      { label: 'Adjustments › Curves', action: 'dialog-curves' },
+      { label: 'Adjustments › Hue/Saturation', action: 'dialog-hsl' },
       { label: 'Adjustments › Invert', action: 'adjust-invert' },
       { label: 'Adjustments › Black & White', action: 'adjust-bw' },
       { divider: true, label: '' },
       { label: 'Blur › Gaussian Blur', action: 'filter-gaussian' },
       { label: 'Blur › Motion Blur', action: 'filter-motion' },
       { label: 'Noise › Add Noise', action: 'filter-noise' },
+      { divider: true, label: '' },
+      { label: 'Flip Canvas Horizontal', action: 'flipCanvasH' },
+      { label: 'Flip Canvas Vertical', action: 'flipCanvasV' },
     ],
   },
   {
@@ -67,6 +79,10 @@ const MENUS: { label: string; items: { label: string; shortcut?: string; action?
       { divider: true, label: '' },
       { label: 'Rulers', shortcut: 'Ctrl+R', action: 'toggleRulers' },
       { label: 'Grid', action: 'toggleGrid' },
+      { label: 'Navigator', action: 'toggleNavigator' },
+      { label: 'Fullscreen', shortcut: 'F', action: 'fullscreen' },
+      { divider: true, label: '' },
+      { label: 'Clear Guides', action: 'clearGuides' },
     ],
   },
   {
@@ -97,7 +113,7 @@ export default function MenuBar() {
     setOpenMenu(null);
     const s = useEditorStore.getState();
     switch (action) {
-      case 'new': s.newProject(); break;
+      case 'new': s.setDialog('new'); break;
       case 'open': handleOpenFile(); break;
       case 'exportPng': handleExport('png'); break;
       case 'exportJpeg': handleExport('jpeg'); break;
@@ -145,6 +161,35 @@ export default function MenuBar() {
       case 'fitScreen': s.setZoom(1); break;
       case 'toggleRulers': s.toggleRulers(); break;
       case 'toggleGrid': s.toggleGrid(); break;
+      case 'toggleNavigator': s.toggleNavigator(); break;
+      case 'fullscreen': s.toggleFullscreen(); break;
+      case 'clearGuides': s.clearGuides(); break;
+      case 'imageSize': s.setDialog('imageSize'); break;
+      case 'canvasSize': s.setDialog('canvasSize'); break;
+      case 'dialog-levels': s.setDialog('levels'); break;
+      case 'dialog-curves': s.setDialog('curves'); break;
+      case 'dialog-hsl': s.setDialog('hsl'); break;
+      case 'flipH': s.flipLayer('horizontal'); break;
+      case 'flipV': s.flipLayer('vertical'); break;
+      case 'flipCanvasH': s.flipCanvas('horizontal'); break;
+      case 'flipCanvasV': s.flipCanvas('vertical'); break;
+      case 'rotateCW': s.rotateLayer(90); break;
+      case 'rotateCCW': s.rotateLayer(-90); break;
+      case 'fx-shadow': {
+        const p = s.projects.find(p => p.id === s.activeProjectId);
+        if (p?.activeLayerId) s.setLayerEffect(p.activeLayerId, { dropShadow: { enabled: true, offsetX: 4, offsetY: 4, blur: 8, spread: 0, color: '#000000', opacity: 50 } });
+        break;
+      }
+      case 'fx-stroke': {
+        const p = s.projects.find(p => p.id === s.activeProjectId);
+        if (p?.activeLayerId) s.setLayerEffect(p.activeLayerId, { stroke: { enabled: true, width: 3, color: '#000000', position: 'outside' } });
+        break;
+      }
+      case 'fx-overlay': {
+        const p = s.projects.find(p => p.id === s.activeProjectId);
+        if (p?.activeLayerId) s.setLayerEffect(p.activeLayerId, { colorOverlay: { enabled: true, color: '#ff0000', opacity: 50 } });
+        break;
+      }
       case 'adjust-invert': {
         const p = s.projects.find(p => p.id === s.activeProjectId);
         if (!p || !p.activeLayerId) return;
