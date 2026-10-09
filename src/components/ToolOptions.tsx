@@ -1,14 +1,16 @@
 import { useEditorStore } from '@/store/editorStore';
+import { useT } from '@/i18n';
 
 export default function ToolOptions() {
   const { tool, setTool } = useEditorStore();
+  const t = useT();
 
   return (
     <div className="tool-options">
       {(tool.id === 'brush' || tool.id === 'eraser') && (
         <>
           <label>
-            Size
+            {t('opt.size')}
             <input
               type="number"
               value={tool.brushSize}
@@ -18,7 +20,7 @@ export default function ToolOptions() {
             />
           </label>
           <label>
-            Hardness
+            {t('opt.hardness')}
             <input
               type="number"
               value={tool.brushHardness}
@@ -28,7 +30,7 @@ export default function ToolOptions() {
             />
           </label>
           <label>
-            Opacity
+            {t('opt.opacity')}
             <input
               type="number"
               value={tool.brushOpacity}
@@ -38,7 +40,7 @@ export default function ToolOptions() {
             />
           </label>
           <label>
-            Color
+            {t('opt.color')}
             <input
               type="color"
               value={tool.brushColor}
@@ -51,20 +53,20 @@ export default function ToolOptions() {
       {tool.id === 'shape' && (
         <>
           <label>
-            Shape
+            {t('opt.shape')}
             <select
               value={tool.shapeType}
               onChange={(e) => setTool({ shapeType: e.target.value as any })}
               style={{ background: '#1a1a1a', border: '1px solid #444', color: '#e0e0e0', borderRadius: 3, fontSize: 11, padding: '2px 4px' }}
             >
-              <option value="rect">Rectangle</option>
-              <option value="rounded-rect">Rounded Rect</option>
-              <option value="ellipse">Ellipse</option>
-              <option value="line">Line</option>
+              <option value="rect">{t('opt.rectangle')}</option>
+              <option value="rounded-rect">{t('opt.roundedRect')}</option>
+              <option value="ellipse">{t('opt.ellipse')}</option>
+              <option value="line">{t('opt.line')}</option>
             </select>
           </label>
           <label>
-            Fill
+            {t('opt.fill')}
             <input
               type="color"
               value={tool.shapeFill}
@@ -77,7 +79,7 @@ export default function ToolOptions() {
       {tool.id === 'text' && (
         <>
           <label>
-            Font
+            {t('opt.font')}
             <select
               value={tool.fontFamily}
               onChange={(e) => setTool({ fontFamily: e.target.value })}
@@ -91,7 +93,7 @@ export default function ToolOptions() {
             </select>
           </label>
           <label>
-            Size
+            {t('opt.size')}
             <input
               type="number"
               value={tool.fontSize}
@@ -101,7 +103,7 @@ export default function ToolOptions() {
             />
           </label>
           <label>
-            Color
+            {t('opt.color')}
             <input
               type="color"
               value={tool.brushColor}
@@ -113,7 +115,7 @@ export default function ToolOptions() {
       )}
       {tool.id === 'fill' && (
         <label>
-          Color
+          {t('opt.color')}
           <input
             type="color"
             value={tool.brushColor}
@@ -125,18 +127,18 @@ export default function ToolOptions() {
       {tool.id === 'gradient' && (
         <>
           <label>
-            Type
+            {t('opt.type')}
             <select
               value={tool.gradientType}
               onChange={(e) => setTool({ gradientType: e.target.value as any })}
               style={{ background: '#1a1a1a', border: '1px solid #444', color: '#e0e0e0', borderRadius: 3, fontSize: 11, padding: '2px 4px' }}
             >
-              <option value="linear">Linear</option>
-              <option value="radial">Radial</option>
+              <option value="linear">{t('opt.linear')}</option>
+              <option value="radial">{t('opt.radial')}</option>
             </select>
           </label>
           <label>
-            Color
+            {t('opt.color')}
             <input
               type="color"
               value={tool.brushColor}
@@ -144,11 +146,11 @@ export default function ToolOptions() {
               style={{ width: 30, height: 22, border: 'none', background: 'none', cursor: 'pointer' }}
             />
           </label>
-          <span style={{ fontSize: 10, color: '#888' }}>Drag on canvas to draw gradient</span>
+          <span style={{ fontSize: 10, color: '#888' }}>{t('opt.gradientHint')}</span>
         </>
       )}
       {tool.id === 'crop' && (
-        <span style={{ fontSize: 10, color: '#888' }}>Drag on canvas to define crop area, then press Enter or Apply</span>
+        <span style={{ fontSize: 10, color: '#888' }}>{t('opt.cropHint')}</span>
       )}
     </div>
   );

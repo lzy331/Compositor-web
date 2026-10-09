@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { useT } from '@/i18n';
 import MenuBar from '@/components/MenuBar';
 import TabBar from '@/components/TabBar';
 import Toolbar from '@/components/Toolbar';
@@ -13,13 +14,18 @@ import CommandPalette from '@/components/CommandPalette';
 import Navigator from '@/components/Navigator';
 
 export default function App() {
-  const { projects, activeProjectId, panels, fullscreen, showNavigator } = useEditorStore();
+  const { projects, activeProjectId, panels, fullscreen, showNavigator, language } = useEditorStore();
+  const t = useT();
 
   useEffect(() => {
     if (projects.length > 0 && !activeProjectId) {
       useEditorStore.getState().setActiveProject(projects[0].id);
     }
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  }, [language]);
 
   return (
     <div className="app" style={fullscreen ? { background: '#000' } : {}}>
@@ -43,9 +49,9 @@ export default function App() {
           <span>Compositor Web</span>
           {activeProjectId && projects.find(p => p.id === activeProjectId) && (() => {
             const p = projects.find(p => p.id === activeProjectId)!;
-            return <span>{p.width} × {p.height}px | Zoom: {Math.round(p.zoom * 100)}%</span>;
+            return <span>{p.width} × {p.height}px | {t('status.zoom')}: {Math.round(p.zoom * 100)}%</span>;
           })()}
-          <span style={{ marginLeft: 'auto', color: '#666' }}>Ctrl+F: commands | Ctrl+T: transform | F: fullscreen | Enter: apply | Esc: cancel</span>
+          <span style={{ marginLeft: 'auto', color: '#666' }}>{t('status.hint')}</span>
         </div>
       )}
       <Dialogs />

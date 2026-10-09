@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { useT } from '@/i18n';
 import { renderProject } from '@/engine/renderer';
 
 const MINI_W = 120;
@@ -9,6 +10,7 @@ export default function Navigator() {
   const showNavigator = useEditorStore((s) => s.showNavigator);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [, force] = useState(0);
+  const t = useT();
 
   // Re-render on relevant store changes
   const projects = useEditorStore((s) => s.projects);
@@ -101,7 +103,7 @@ export default function Navigator() {
       }}
     >
       <div style={{ fontSize: 9, color: '#888', marginBottom: 3, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        Navigator
+        {t('panel.navigator')}
       </div>
       <canvas
         ref={canvasRef}

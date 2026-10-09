@@ -1,9 +1,21 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type {
-  AppState, ProjectState, LayerData, ToolId, ToolState, Selection, BlendMode,
+  AppState, ProjectState, LayerData, ToolId, ToolState, Selection, BlendMode, Language,
 } from '@/types';
 import { uid, createCanvas } from '@/engine/colorUtils';
+
+const LANG_STORAGE_KEY = 'compositor-web.lang';
+
+function loadLanguage(): Language {
+  try {
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    if (saved === 'en' || saved === 'zh') return saved;
+  } catch {
+    // ignore (e.g. SSR / blocked storage)
+  }
+  return 'en';
+}
 
 const DEFAULT_SHORTCUTS: Record<string, string> = {
   'v': 'move',
@@ -144,6 +156,7 @@ interface StoreActions {
   toggleNavigator: () => void;
   setDialog: (type: AppState['dialog']['type']) => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setLanguage: (lang: Language) => void;
 
   // Canvas
   setZoom: (zoom: number) => void;
@@ -199,6 +212,7 @@ export const useEditorStore = create<AppState & StoreActions>()(
     crop: null,
     dialog: { type: null },
     commandPaletteOpen: false,
+    language: loadLanguage(),
     panels: { layers: true, properties: true, history: true },
     keyboardShortcuts: DEFAULT_SHORTCUTS,
 
@@ -516,6 +530,14 @@ export const useEditorStore = create<AppState & StoreActions>()(
     toggleNavigator: () => set((state: any) => { state.showNavigator = !state.showNavigator; }),
     setDialog: (type) => set((state: any) => { state.dialog = { type }; }),
     setCommandPaletteOpen: (open) => set((state: any) => { state.commandPaletteOpen = open; }),
+    setLanguage: (lang) => {
+      try {
+        localStorage.setItem(LANG_STORAGE_KEY, lang);
+      } catch {
+        // ignore
+      }
+      set((state: any) => { state.language = lang; });
+    },
 
     beginTransform: () => set((state: any) => {
       const p = state.projects.find((p: any) => p.id === state.activeProjectId);

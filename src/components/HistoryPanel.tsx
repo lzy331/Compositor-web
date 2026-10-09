@@ -1,4 +1,5 @@
 import { useEditorStore } from '@/store/editorStore';
+import { useT, translateHistory } from '@/i18n';
 import type { HistoryEntry } from '@/types';
 
 export default function HistoryPanel() {
@@ -6,6 +7,7 @@ export default function HistoryPanel() {
   const historyIndex = useEditorStore((s) => s.historyIndex);
   const panels = useEditorStore((s) => s.panels);
   const togglePanel = useEditorStore((s) => s.togglePanel);
+  const t = useT();
 
   if (!panels.history) return null;
 
@@ -28,12 +30,12 @@ export default function HistoryPanel() {
   return (
     <div className="panel" style={{ maxHeight: 200 }}>
       <div className="panel-header" onClick={() => togglePanel('history')}>
-        <span>History</span>
+        <span>{t('panel.history')}</span>
         <span style={{ fontSize: 10, color: '#666' }}>{history.length}</span>
       </div>
       <div className="panel-body" style={{ padding: 0, maxHeight: 160 }}>
         {entries.length === 0 && (
-          <div style={{ padding: 12, color: '#666', fontSize: 11, textAlign: 'center' }}>No history yet</div>
+          <div style={{ padding: 12, color: '#666', fontSize: 11, textAlign: 'center' }}>{t('history.empty')}</div>
         )}
         {entries.map((entry, i) => {
           const originalIndex = history.length - 1 - i;
@@ -43,6 +45,7 @@ export default function HistoryPanel() {
               key={originalIndex}
               entry={entry}
               active={isActive}
+              label={translateHistory(useEditorStore.getState().language, entry.description)}
               onClick={() => jumpTo(originalIndex)}
             />
           );
@@ -52,7 +55,7 @@ export default function HistoryPanel() {
   );
 }
 
-function HistoryItem({ entry, active, onClick }: { entry: HistoryEntry; active: boolean; onClick: () => void }) {
+function HistoryItem({ entry, active, label, onClick }: { entry: HistoryEntry; active: boolean; label: string; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -71,7 +74,7 @@ function HistoryItem({ entry, active, onClick }: { entry: HistoryEntry; active: 
         {active ? '●' : '○'}
       </span>
       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {entry.description}
+        {label}
       </span>
     </div>
   );

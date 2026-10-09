@@ -1,5 +1,7 @@
 // ===== Core Types =====
 
+export type Language = 'en' | 'zh';
+
 export type BlendMode =
   | 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten'
   | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference'
@@ -146,6 +148,7 @@ export interface AppState {
   crop: CropState | null;
   dialog: DialogState;
   commandPaletteOpen: boolean;
+  language: Language;
   panels: {
     layers: boolean;
     properties: boolean;

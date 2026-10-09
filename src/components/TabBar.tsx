@@ -1,7 +1,9 @@
 import { useEditorStore } from '@/store/editorStore';
+import { useT } from '@/i18n';
 
 export default function TabBar() {
   const { projects, activeProjectId, setActiveProject, closeProject, newProject } = useEditorStore();
+  const t = useT();
 
   return (
     <div className="tab-bar">
@@ -23,7 +25,7 @@ export default function TabBar() {
           </span>
         </div>
       ))}
-      <div className="tab-add" onClick={() => newProject()} title="New project">
+      <div className="tab-add" onClick={() => newProject()} title={t('tab.newProject')}>
         +
       </div>
     </div>

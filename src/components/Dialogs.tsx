@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { useT } from '@/i18n';
 import { applyAdjustment } from '@/engine/filters';
 import type { AdjustmentSettings } from '@/types';
 
@@ -12,8 +13,8 @@ export default function Dialogs() {
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) useEditorStore.getState().setDialog(null); }}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         {dialog.type === 'new' && <NewDialog />}
-        {dialog.type === 'imageSize' && <SizeDialog title="Image Size" />}
-        {dialog.type === 'canvasSize' && <SizeDialog title="Canvas Size" />}
+        {dialog.type === 'imageSize' && <SizeDialog titleKey="dlg.imageSize" />}
+        {dialog.type === 'canvasSize' && <SizeDialog titleKey="dlg.canvasSize" />}
         {dialog.type === 'levels' && <LevelsDialog />}
         {dialog.type === 'curves' && <CurvesDialog />}
         {dialog.type === 'hsl' && <HslDialog />}
@@ -31,55 +32,57 @@ function NewDialog() {
   const [width, setWidth] = useState(project?.width ?? 800);
   const [height, setHeight] = useState(project?.height ?? 600);
   const [name, setName] = useState('Untitled');
+  const t = useT();
 
   return (
     <>
-      <h3>New Project</h3>
+      <h3>{t('dlg.newProject')}</h3>
       <div className="modal-form-row">
-        <label>Name</label>
+        <label>{t('dlg.name')}</label>
         <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </div>
       <div className="modal-form-row">
-        <label>Width</label>
+        <label>{t('dlg.width')}</label>
         <input type="number" value={width} min={1} onChange={(e) => setWidth(Math.max(1, parseInt(e.target.value) || 1))} />
       </div>
       <div className="modal-form-row">
-        <label>Height</label>
+        <label>{t('dlg.height')}</label>
         <input type="number" value={height} min={1} onChange={(e) => setHeight(Math.max(1, parseInt(e.target.value) || 1))} />
       </div>
       <div className="modal-actions">
-        <button className="btn" onClick={closeDialog}>Cancel</button>
+        <button className="btn" onClick={closeDialog}>{t('dlg.cancel')}</button>
         <button className="btn btn-primary" onClick={() => {
           useEditorStore.getState().newProject(width, height, name);
           closeDialog();
-        }}>OK</button>
+        }}>{t('dlg.ok')}</button>
       </div>
     </>
   );
 }
 
-function SizeDialog({ title }: { title: string }) {
+function SizeDialog({ titleKey }: { titleKey: string }) {
   const project = useEditorStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
   const [width, setWidth] = useState(project?.width ?? 800);
   const [height, setHeight] = useState(project?.height ?? 600);
+  const t = useT();
 
   return (
     <>
-      <h3>{title}</h3>
+      <h3>{t(titleKey)}</h3>
       <div className="modal-form-row">
-        <label>Width</label>
+        <label>{t('dlg.width')}</label>
         <input type="number" value={width} min={1} onChange={(e) => setWidth(Math.max(1, parseInt(e.target.value) || 1))} />
       </div>
       <div className="modal-form-row">
-        <label>Height</label>
+        <label>{t('dlg.height')}</label>
         <input type="number" value={height} min={1} onChange={(e) => setHeight(Math.max(1, parseInt(e.target.value) || 1))} />
       </div>
       <div className="modal-actions">
-        <button className="btn" onClick={closeDialog}>Cancel</button>
+        <button className="btn" onClick={closeDialog}>{t('dlg.cancel')}</button>
         <button className="btn btn-primary" onClick={() => {
           useEditorStore.getState().resizeCanvas(width, height);
           closeDialog();
-        }}>Apply</button>
+        }}>{t('dlg.apply')}</button>
       </div>
     </>
   );
@@ -149,6 +152,7 @@ function LevelsDialog() {
   const [outputBlack, setOutputBlack] = useState(0);
   const [outputWhite, setOutputWhite] = useState(255);
   const { captureOriginal, apply, commit, revert } = useLiveAdjustment();
+  const t = useT();
 
   useEffect(() => {
     captureOriginal();
@@ -161,15 +165,15 @@ function LevelsDialog() {
 
   return (
     <>
-      <h3>Levels</h3>
-      <SliderRow label="Input Black" value={inputBlack} min={0} max={255} step={1} onChange={(v) => { setInputBlack(v); applyLive({ inputBlack: v }); }} />
-      <SliderRow label="Input White" value={inputWhite} min={0} max={255} step={1} onChange={(v) => { setInputWhite(v); applyLive({ inputWhite: v }); }} />
-      <SliderRow label="Gamma" value={gamma} min={0.1} max={3} step={0.1} onChange={(v) => { setGamma(v); applyLive({ gamma: v }); }} />
-      <SliderRow label="Output Black" value={outputBlack} min={0} max={255} step={1} onChange={(v) => { setOutputBlack(v); applyLive({ outputBlack: v }); }} />
-      <SliderRow label="Output White" value={outputWhite} min={0} max={255} step={1} onChange={(v) => { setOutputWhite(v); applyLive({ outputWhite: v }); }} />
+      <h3>{t('dlg.levels')}</h3>
+      <SliderRow label={t('dlg.inputBlack')} value={inputBlack} min={0} max={255} step={1} onChange={(v) => { setInputBlack(v); applyLive({ inputBlack: v }); }} />
+      <SliderRow label={t('dlg.inputWhite')} value={inputWhite} min={0} max={255} step={1} onChange={(v) => { setInputWhite(v); applyLive({ inputWhite: v }); }} />
+      <SliderRow label={t('dlg.gamma')} value={gamma} min={0.1} max={3} step={0.1} onChange={(v) => { setGamma(v); applyLive({ gamma: v }); }} />
+      <SliderRow label={t('dlg.outputBlack')} value={outputBlack} min={0} max={255} step={1} onChange={(v) => { setOutputBlack(v); applyLive({ outputBlack: v }); }} />
+      <SliderRow label={t('dlg.outputWhite')} value={outputWhite} min={0} max={255} step={1} onChange={(v) => { setOutputWhite(v); applyLive({ outputWhite: v }); }} />
       <div className="modal-actions">
-        <button className="btn" onClick={() => { revert(); closeDialog(); }}>Cancel</button>
-        <button className="btn btn-primary" onClick={() => { commit('Levels'); closeDialog(); }}>OK</button>
+        <button className="btn" onClick={() => { revert(); closeDialog(); }}>{t('dlg.cancel')}</button>
+        <button className="btn btn-primary" onClick={() => { commit('Levels'); closeDialog(); }}>{t('dlg.ok')}</button>
       </div>
     </>
   );
@@ -178,6 +182,7 @@ function LevelsDialog() {
 function CurvesDialog() {
   const [brightness, setBrightness] = useState(0);
   const { captureOriginal, apply, commit, revert } = useLiveAdjustment();
+  const t = useT();
 
   useEffect(() => {
     captureOriginal();
@@ -191,11 +196,11 @@ function CurvesDialog() {
 
   return (
     <>
-      <h3>Curves</h3>
-      <SliderRow label="Brightness" value={brightness} min={-50} max={50} step={1} onChange={(v) => { setBrightness(v); applyLive(v); }} />
+      <h3>{t('dlg.curves')}</h3>
+      <SliderRow label={t('dlg.brightness')} value={brightness} min={-50} max={50} step={1} onChange={(v) => { setBrightness(v); applyLive(v); }} />
       <div className="modal-actions">
-        <button className="btn" onClick={() => { revert(); closeDialog(); }}>Cancel</button>
-        <button className="btn btn-primary" onClick={() => { commit('Curves'); closeDialog(); }}>OK</button>
+        <button className="btn" onClick={() => { revert(); closeDialog(); }}>{t('dlg.cancel')}</button>
+        <button className="btn btn-primary" onClick={() => { commit('Curves'); closeDialog(); }}>{t('dlg.ok')}</button>
       </div>
     </>
   );
@@ -206,6 +211,7 @@ function HslDialog() {
   const [saturation, setSaturation] = useState(0);
   const [lightness, setLightness] = useState(0);
   const { captureOriginal, apply, commit, revert } = useLiveAdjustment();
+  const t = useT();
 
   useEffect(() => {
     captureOriginal();
@@ -218,13 +224,13 @@ function HslDialog() {
 
   return (
     <>
-      <h3>Hue / Saturation</h3>
-      <SliderRow label="Hue" value={hue} min={-180} max={180} step={1} onChange={(v) => { setHue(v); applyLive({ hue: v }); }} />
-      <SliderRow label="Saturation" value={saturation} min={-100} max={100} step={1} onChange={(v) => { setSaturation(v); applyLive({ saturation: v }); }} />
-      <SliderRow label="Lightness" value={lightness} min={-100} max={100} step={1} onChange={(v) => { setLightness(v); applyLive({ lightness: v }); }} />
+      <h3>{t('dlg.hsl')}</h3>
+      <SliderRow label={t('prop.hue')} value={hue} min={-180} max={180} step={1} onChange={(v) => { setHue(v); applyLive({ hue: v }); }} />
+      <SliderRow label={t('dlg.saturation')} value={saturation} min={-100} max={100} step={1} onChange={(v) => { setSaturation(v); applyLive({ saturation: v }); }} />
+      <SliderRow label={t('dlg.lightness')} value={lightness} min={-100} max={100} step={1} onChange={(v) => { setLightness(v); applyLive({ lightness: v }); }} />
       <div className="modal-actions">
-        <button className="btn" onClick={() => { revert(); closeDialog(); }}>Cancel</button>
-        <button className="btn btn-primary" onClick={() => { commit('Hue/Saturation'); closeDialog(); }}>OK</button>
+        <button className="btn" onClick={() => { revert(); closeDialog(); }}>{t('dlg.cancel')}</button>
+        <button className="btn btn-primary" onClick={() => { commit('Hue/Saturation'); closeDialog(); }}>{t('dlg.ok')}</button>
       </div>
     </>
   );

@@ -1,95 +1,97 @@
 import { useState, useRef, useEffect } from 'react';
 import { useEditorStore } from '@/store/editorStore';
-import type { ToolId } from '@/types';
+import { useT } from '@/i18n';
+import type { Language } from '@/types';
 
-const MENUS: { label: string; items: { label: string; shortcut?: string; action?: string; divider?: boolean }[] }[] = [
+type MenuItem = { labelKey?: string; shortcut?: string; action?: string; divider?: boolean };
+const MENUS: { labelKey: string; items: MenuItem[] }[] = [
   {
-    label: 'File',
+    labelKey: 'menu.file',
     items: [
-      { label: 'New', shortcut: 'Ctrl+N', action: 'new' },
-      { label: 'Open...', shortcut: 'Ctrl+O', action: 'open' },
-      { divider: true, label: '' },
-      { label: 'Export PNG', shortcut: 'Ctrl+E', action: 'exportPng' },
-      { label: 'Export JPEG', shortcut: 'Ctrl+Shift+E', action: 'exportJpeg' },
+      { labelKey: 'menu.new', shortcut: 'Ctrl+N', action: 'new' },
+      { labelKey: 'menu.open', shortcut: 'Ctrl+O', action: 'open' },
+      { divider: true },
+      { labelKey: 'menu.exportPng', shortcut: 'Ctrl+E', action: 'exportPng' },
+      { labelKey: 'menu.exportJpeg', shortcut: 'Ctrl+Shift+E', action: 'exportJpeg' },
     ],
   },
   {
-    label: 'Edit',
+    labelKey: 'menu.edit',
     items: [
-      { label: 'Undo', shortcut: 'Ctrl+Z', action: 'undo' },
-      { label: 'Redo', shortcut: 'Ctrl+Shift+Z', action: 'redo' },
-      { divider: true, label: '' },
-      { label: 'Copy Layer', shortcut: 'Ctrl+C', action: 'copy' },
-      { label: 'Paste Layer', shortcut: 'Ctrl+V', action: 'paste' },
+      { labelKey: 'menu.undo', shortcut: 'Ctrl+Z', action: 'undo' },
+      { labelKey: 'menu.redo', shortcut: 'Ctrl+Shift+Z', action: 'redo' },
+      { divider: true },
+      { labelKey: 'menu.copyLayer', shortcut: 'Ctrl+C', action: 'copy' },
+      { labelKey: 'menu.pasteLayer', shortcut: 'Ctrl+V', action: 'paste' },
     ],
   },
   {
-    label: 'Layer',
+    labelKey: 'menu.layer',
     items: [
-      { label: 'New Layer', shortcut: 'Ctrl+Shift+N', action: 'addLayer' },
-      { label: 'Duplicate Layer', shortcut: 'Ctrl+J', action: 'duplicate' },
-      { label: 'Delete Layer', shortcut: 'Del', action: 'delete' },
-      { divider: true, label: '' },
-      { label: 'Merge Down', shortcut: 'Ctrl+E', action: 'mergeDown' },
-      { label: 'Add Layer Mask', action: 'addMask' },
-      { divider: true, label: '' },
-      { label: 'Flip Horizontal', action: 'flipH' },
-      { label: 'Flip Vertical', action: 'flipV' },
-      { label: 'Rotate 90° CW', action: 'rotateCW' },
-      { label: 'Rotate 90° CCW', action: 'rotateCCW' },
-      { divider: true, label: '' },
-      { label: 'Layer Style › Drop Shadow', action: 'fx-shadow' },
-      { label: 'Layer Style › Stroke', action: 'fx-stroke' },
-      { label: 'Layer Style › Color Overlay', action: 'fx-overlay' },
+      { labelKey: 'menu.newLayer', shortcut: 'Ctrl+Shift+N', action: 'addLayer' },
+      { labelKey: 'menu.duplicateLayer', shortcut: 'Ctrl+J', action: 'duplicate' },
+      { labelKey: 'menu.deleteLayer', shortcut: 'Del', action: 'delete' },
+      { divider: true },
+      { labelKey: 'menu.mergeDown', shortcut: 'Ctrl+E', action: 'mergeDown' },
+      { labelKey: 'menu.addMask', action: 'addMask' },
+      { divider: true },
+      { labelKey: 'menu.flipH', action: 'flipH' },
+      { labelKey: 'menu.flipV', action: 'flipV' },
+      { labelKey: 'menu.rotateCW', action: 'rotateCW' },
+      { labelKey: 'menu.rotateCCW', action: 'rotateCCW' },
+      { divider: true },
+      { labelKey: 'menu.fxShadow', action: 'fx-shadow' },
+      { labelKey: 'menu.fxStroke', action: 'fx-stroke' },
+      { labelKey: 'menu.fxOverlay', action: 'fx-overlay' },
     ],
   },
   {
-    label: 'Image',
+    labelKey: 'menu.image',
     items: [
-      { label: 'Image Size...', action: 'imageSize' },
-      { label: 'Canvas Size...', action: 'canvasSize' },
-      { divider: true, label: '' },
-      { label: 'Adjustments › Levels', action: 'dialog-levels' },
-      { label: 'Adjustments › Curves', action: 'dialog-curves' },
-      { label: 'Adjustments › Hue/Saturation', action: 'dialog-hsl' },
-      { label: 'Adjustments › Invert', action: 'adjust-invert' },
-      { label: 'Adjustments › Black & White', action: 'adjust-bw' },
-      { divider: true, label: '' },
-      { label: 'Blur › Gaussian Blur', action: 'filter-gaussian' },
-      { label: 'Blur › Motion Blur', action: 'filter-motion' },
-      { label: 'Noise › Add Noise', action: 'filter-noise' },
-      { divider: true, label: '' },
-      { label: 'Flip Canvas Horizontal', action: 'flipCanvasH' },
-      { label: 'Flip Canvas Vertical', action: 'flipCanvasV' },
+      { labelKey: 'menu.imageSize', action: 'imageSize' },
+      { labelKey: 'menu.canvasSize', action: 'canvasSize' },
+      { divider: true },
+      { labelKey: 'menu.adjLevels', action: 'dialog-levels' },
+      { labelKey: 'menu.adjCurves', action: 'dialog-curves' },
+      { labelKey: 'menu.adjHsl', action: 'dialog-hsl' },
+      { labelKey: 'menu.adjInvert', action: 'adjust-invert' },
+      { labelKey: 'menu.adjBw', action: 'adjust-bw' },
+      { divider: true },
+      { labelKey: 'menu.blurGaussian', action: 'filter-gaussian' },
+      { labelKey: 'menu.blurMotion', action: 'filter-motion' },
+      { labelKey: 'menu.noiseAdd', action: 'filter-noise' },
+      { divider: true },
+      { labelKey: 'menu.flipCanvasH', action: 'flipCanvasH' },
+      { labelKey: 'menu.flipCanvasV', action: 'flipCanvasV' },
     ],
   },
   {
-    label: 'Select',
+    labelKey: 'menu.select',
     items: [
-      { label: 'All', shortcut: 'Ctrl+A', action: 'selectAll' },
-      { label: 'Deselect', shortcut: 'Ctrl+D', action: 'deselect' },
+      { labelKey: 'menu.selectAll', shortcut: 'Ctrl+A', action: 'selectAll' },
+      { labelKey: 'menu.deselect', shortcut: 'Ctrl+D', action: 'deselect' },
     ],
   },
   {
-    label: 'View',
+    labelKey: 'menu.view',
     items: [
-      { label: 'Zoom In', shortcut: 'Ctrl++', action: 'zoomIn' },
-      { label: 'Zoom Out', shortcut: 'Ctrl+-', action: 'zoomOut' },
-      { label: 'Fit to Screen', shortcut: 'Ctrl+0', action: 'fitScreen' },
-      { divider: true, label: '' },
-      { label: 'Rulers', shortcut: 'Ctrl+R', action: 'toggleRulers' },
-      { label: 'Grid', action: 'toggleGrid' },
-      { label: 'Navigator', action: 'toggleNavigator' },
-      { label: 'Fullscreen', shortcut: 'F', action: 'fullscreen' },
-      { divider: true, label: '' },
-      { label: 'Clear Guides', action: 'clearGuides' },
+      { labelKey: 'menu.zoomIn', shortcut: 'Ctrl++', action: 'zoomIn' },
+      { labelKey: 'menu.zoomOut', shortcut: 'Ctrl+-', action: 'zoomOut' },
+      { labelKey: 'menu.fitScreen', shortcut: 'Ctrl+0', action: 'fitScreen' },
+      { divider: true },
+      { labelKey: 'menu.rulers', shortcut: 'Ctrl+R', action: 'toggleRulers' },
+      { labelKey: 'menu.grid', action: 'toggleGrid' },
+      { labelKey: 'menu.navigator', action: 'toggleNavigator' },
+      { labelKey: 'menu.fullscreen', shortcut: 'F', action: 'fullscreen' },
+      { divider: true },
+      { labelKey: 'menu.clearGuides', action: 'clearGuides' },
     ],
   },
   {
-    label: 'Help',
+    labelKey: 'menu.help',
     items: [
-      { label: 'Keyboard Shortcuts', action: 'shortcuts' },
-      { label: 'About Compositor Web', action: 'about' },
+      { labelKey: 'menu.shortcuts', action: 'shortcuts' },
+      { labelKey: 'menu.about', action: 'about' },
     ],
   },
 ];
@@ -98,6 +100,8 @@ export default function MenuBar() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const store = useEditorStore();
+  const t = useT();
+  const language = useEditorStore((s) => s.language);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -242,9 +246,20 @@ export default function MenuBar() {
         });
         break;
       }
-      case 'about':
-        alert('Compositor Web v0.1.0\nA web-based image editor inspired by Compositor for macOS.\nBuilt with React + TypeScript + Canvas.');
+      case 'about': {
+        const lang = useEditorStore.getState().language;
+        alert(lang === 'zh'
+          ? 'Compositor Web v0.1.0\n一款受 macOS 版 Compositor 启发的网页图像编辑器。\n使用 React + TypeScript + Canvas 构建。'
+          : 'Compositor Web v0.1.0\nA web-based image editor inspired by Compositor for macOS.\nBuilt with React + TypeScript + Canvas.');
         break;
+      }
+      case 'shortcuts': {
+        const lang = useEditorStore.getState().language;
+        alert(lang === 'zh'
+          ? '快捷键：\nV 移动  M 选框  L 套索  W 魔棒  C 裁剪  I 吸管\nB 画笔  E 橡皮  G 填充  U 形状  T 文字  S 仿制图章\nR 模糊  H 抓手  Z 缩放\n[ ] 调整画笔大小\nCtrl+Z 撤销  Ctrl+Shift+Z 重做\nCtrl+A 全选  Ctrl+D 取消选择  Ctrl+J 复制图层\nCtrl+F 命令面板  Ctrl+T 变换  F 全屏\n回车 应用变换/裁剪  Esc 取消'
+          : 'Shortcuts:\nV Move  M Marquee  L Lasso  W Magic Wand  C Crop  I Eyedropper\nB Brush  E Eraser  G Fill  U Shape  T Type  S Clone Stamp\nR Blur  H Hand  Z Zoom\n[ ] Adjust brush size\nCtrl+Z Undo  Ctrl+Shift+Z Redo\nCtrl+A Select All  Ctrl+D Deselect  Ctrl+J Duplicate Layer\nCtrl+F Command Palette  Ctrl+T Transform  F Fullscreen\nEnter Apply transform/crop  Esc Cancel');
+        break;
+      }
     }
   };
 
@@ -297,22 +312,22 @@ export default function MenuBar() {
   return (
     <div className="menu-bar" ref={ref}>
       {MENUS.map((menu) => (
-        <div key={menu.label} style={{ position: 'relative' }}>
+        <div key={menu.labelKey} style={{ position: 'relative' }}>
           <div
             className="menu-item"
-            onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}
-            style={openMenu === menu.label ? { background: '#3a3a3a' } : {}}
+            onClick={() => setOpenMenu(openMenu === menu.labelKey ? null : menu.labelKey)}
+            style={openMenu === menu.labelKey ? { background: '#3a3a3a' } : {}}
           >
-            {menu.label}
+            {t(menu.labelKey)}
           </div>
-          {openMenu === menu.label && (
+          {openMenu === menu.labelKey && (
             <div className="menu-dropdown">
               {menu.items.map((item, i) =>
                 item.divider ? (
                   <div key={i} className="menu-separator" />
                 ) : (
                   <div key={i} className="menu-dropdown-item" onClick={() => handleAction(item.action!)}>
-                    <span>{item.label}</span>
+                    <span>{item.labelKey ? t(item.labelKey) : ''}</span>
                     {item.shortcut && <span className="shortcut">{item.shortcut}</span>}
                   </div>
                 )
@@ -321,6 +336,27 @@ export default function MenuBar() {
           )}
         </div>
       ))}
+      {/* Language switcher */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, paddingRight: 4 }} title={t('lang.switch')}>
+        {(['en', 'zh'] as Language[]).map((lang) => (
+          <button
+            key={lang}
+            className="lang-btn"
+            onClick={() => useEditorStore.getState().setLanguage(lang)}
+            style={{
+              background: language === lang ? '#3a5a8a' : 'transparent',
+              color: language === lang ? '#fff' : '#aaa',
+              border: '1px solid ' + (language === lang ? '#4a7aba' : '#3a3a3a'),
+              borderRadius: 4,
+              fontSize: 11,
+              padding: '2px 8px',
+              cursor: 'pointer',
+            }}
+          >
+            {lang === 'en' ? 'EN' : '中文'}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

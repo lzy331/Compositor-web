@@ -1,19 +1,22 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { useT, translate } from '@/i18n';
 import { applyAdjustment } from '@/engine/filters';
 import { renderProject } from '@/engine/renderer';
 
 interface CommandItem {
-  label: string;
+  labelKey: string;
   keywords?: string;
   run: () => void;
 }
 
 export default function CommandPalette() {
   const open = useEditorStore((s) => s.commandPaletteOpen);
+  const language = useEditorStore((s) => s.language);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useT();
 
   useEffect(() => {
     if (open) {
@@ -55,44 +58,44 @@ export default function CommandPalette() {
     };
 
     return [
-      { label: 'New Project', keywords: 'new create', run: () => s.setDialog('new') },
-      { label: 'Open', keywords: 'open file image import', run: () => handleOpenFile() },
-      { label: 'Export PNG', keywords: 'export save png', run: () => handleExport('png') },
-      { label: 'Export JPEG', keywords: 'export save jpeg jpg', run: () => handleExport('jpeg') },
-      { label: 'Undo', keywords: 'undo revert', run: () => s.undo() },
-      { label: 'Redo', keywords: 'redo', run: () => s.redo() },
-      { label: 'Duplicate Layer', keywords: 'duplicate layer copy', run: () => { const p = getProject(); if (p?.activeLayerId) s.duplicateLayer(p.activeLayerId); } },
-      { label: 'Delete Layer', keywords: 'delete layer remove', run: () => { const p = getProject(); if (p?.activeLayerId) s.deleteLayer(p.activeLayerId); } },
-      { label: 'Merge Down', keywords: 'merge layer down flatten', run: () => s.mergeDown() },
-      { label: 'Flip Horizontal', keywords: 'flip horizontal mirror', run: () => s.flipCanvas('horizontal') },
-      { label: 'Flip Vertical', keywords: 'flip vertical mirror', run: () => s.flipCanvas('vertical') },
-      { label: 'Rotate 90° CW', keywords: 'rotate clockwise cw', run: () => s.rotateLayer(90) },
-      { label: 'Rotate 90° CCW', keywords: 'rotate counter ccw', run: () => s.rotateLayer(-90) },
-      { label: 'Levels', keywords: 'levels adjustment', run: () => s.setDialog('levels') },
-      { label: 'Curves', keywords: 'curves adjustment brightness', run: () => s.setDialog('curves') },
-      { label: 'Hue/Saturation', keywords: 'hsl hue saturation color', run: () => s.setDialog('hsl') },
-      { label: 'Invert', keywords: 'invert colors', run: () => applyToActiveLayer({ type: 'invert', params: {} }, 'Invert') },
-      { label: 'Black & White', keywords: 'bw black white desaturate grayscale', run: () => applyToActiveLayer({ type: 'bw', params: {} }, 'Black & White') },
-      { label: 'Gaussian Blur', keywords: 'blur gaussian filter', run: () => applyToActiveLayer({ type: 'gaussian-blur', params: { radius: 5 } }, 'Gaussian Blur') },
-      { label: 'Add Noise', keywords: 'noise grain filter', run: () => applyToActiveLayer({ type: 'noise', params: { amount: 15, monochrome: false } }, 'Add Noise') },
-      { label: 'Select All', keywords: 'select all selection', run: () => { const p = getProject(); if (p) s.setSelection({ x: 0, y: 0, width: p.width, height: p.height, type: 'rect' }); } },
-      { label: 'Deselect', keywords: 'deselect selection none', run: () => s.setSelection(null) },
-      { label: 'Zoom In', keywords: 'zoom in magnify', run: () => { const p = getProject(); if (p) s.setZoom(Math.min(16, p.zoom * 1.25)); } },
-      { label: 'Zoom Out', keywords: 'zoom out', run: () => { const p = getProject(); if (p) s.setZoom(Math.max(0.05, p.zoom / 1.25)); } },
-      { label: 'Fit Screen', keywords: 'fit screen zoom reset', run: () => s.setZoom(1) },
-      { label: 'Toggle Rulers', keywords: 'rulers toggle', run: () => s.toggleRulers() },
-      { label: 'Toggle Grid', keywords: 'grid toggle', run: () => s.toggleGrid() },
-      { label: 'Fullscreen', keywords: 'fullscreen toggle', run: () => s.toggleFullscreen() },
+      { labelKey: 'cmd.newProject', keywords: 'new create 新建 创建', run: () => s.setDialog('new') },
+      { labelKey: 'cmd.open', keywords: 'open file image import 打开 文件 导入', run: () => handleOpenFile() },
+      { labelKey: 'cmd.exportPng', keywords: 'export save png 导出 保存', run: () => handleExport('png') },
+      { labelKey: 'cmd.exportJpeg', keywords: 'export save jpeg jpg 导出 保存', run: () => handleExport('jpeg') },
+      { labelKey: 'cmd.undo', keywords: 'undo revert 撤销', run: () => s.undo() },
+      { labelKey: 'cmd.redo', keywords: 'redo 重做', run: () => s.redo() },
+      { labelKey: 'cmd.duplicateLayer', keywords: 'duplicate layer copy 复制 图层', run: () => { const p = getProject(); if (p?.activeLayerId) s.duplicateLayer(p.activeLayerId); } },
+      { labelKey: 'cmd.deleteLayer', keywords: 'delete layer remove 删除 图层', run: () => { const p = getProject(); if (p?.activeLayerId) s.deleteLayer(p.activeLayerId); } },
+      { labelKey: 'cmd.mergeDown', keywords: 'merge layer down flatten 合并 图层', run: () => s.mergeDown() },
+      { labelKey: 'cmd.flipH', keywords: 'flip horizontal mirror 水平 翻转', run: () => s.flipCanvas('horizontal') },
+      { labelKey: 'cmd.flipV', keywords: 'flip vertical mirror 垂直 翻转', run: () => s.flipCanvas('vertical') },
+      { labelKey: 'cmd.rotateCW', keywords: 'rotate clockwise cw 旋转 顺时针', run: () => s.rotateLayer(90) },
+      { labelKey: 'cmd.rotateCCW', keywords: 'rotate counter ccw 旋转 逆时针', run: () => s.rotateLayer(-90) },
+      { labelKey: 'cmd.levels', keywords: 'levels adjustment 色阶 调整', run: () => s.setDialog('levels') },
+      { labelKey: 'cmd.curves', keywords: 'curves adjustment brightness 曲线 调整 亮度', run: () => s.setDialog('curves') },
+      { labelKey: 'cmd.hsl', keywords: 'hsl hue saturation color 色相 饱和度 颜色', run: () => s.setDialog('hsl') },
+      { labelKey: 'cmd.invert', keywords: 'invert colors 反相', run: () => applyToActiveLayer({ type: 'invert', params: {} }, 'Invert') },
+      { labelKey: 'cmd.bw', keywords: 'bw black white desaturate grayscale 黑白', run: () => applyToActiveLayer({ type: 'bw', params: {} }, 'Black & White') },
+      { labelKey: 'cmd.gaussianBlur', keywords: 'blur gaussian filter 模糊 高斯', run: () => applyToActiveLayer({ type: 'gaussian-blur', params: { radius: 5 } }, 'Gaussian Blur') },
+      { labelKey: 'cmd.addNoise', keywords: 'noise grain filter 杂色 噪点', run: () => applyToActiveLayer({ type: 'noise', params: { amount: 15, monochrome: false } }, 'Add Noise') },
+      { labelKey: 'cmd.selectAll', keywords: 'select all selection 全选', run: () => { const p = getProject(); if (p) s.setSelection({ x: 0, y: 0, width: p.width, height: p.height, type: 'rect' }); } },
+      { labelKey: 'cmd.deselect', keywords: 'deselect selection none 取消选择', run: () => s.setSelection(null) },
+      { labelKey: 'cmd.zoomIn', keywords: 'zoom in magnify 放大', run: () => { const p = getProject(); if (p) s.setZoom(Math.min(16, p.zoom * 1.25)); } },
+      { labelKey: 'cmd.zoomOut', keywords: 'zoom out 缩小', run: () => { const p = getProject(); if (p) s.setZoom(Math.max(0.05, p.zoom / 1.25)); } },
+      { labelKey: 'cmd.fitScreen', keywords: 'fit screen zoom reset 适合屏幕', run: () => s.setZoom(1) },
+      { labelKey: 'cmd.toggleRulers', keywords: 'rulers toggle 标尺', run: () => s.toggleRulers() },
+      { labelKey: 'cmd.toggleGrid', keywords: 'grid toggle 网格', run: () => s.toggleGrid() },
+      { labelKey: 'cmd.fullscreen', keywords: 'fullscreen toggle 全屏', run: () => s.toggleFullscreen() },
     ];
-  }, []);
+  }, [language]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;
     return commands.filter((c) =>
-      c.label.toLowerCase().includes(q) || (c.keywords ?? '').toLowerCase().includes(q)
+      translate(language, c.labelKey).toLowerCase().includes(q) || (c.keywords ?? '').toLowerCase().includes(q)
     );
-  }, [query, commands]);
+  }, [query, commands, language]);
 
   useEffect(() => {
     setSelected(0);
@@ -127,7 +130,7 @@ export default function CommandPalette() {
             ref={inputRef}
             className="prop-input"
             style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
-            placeholder="Type a command..."
+            placeholder={t('cmd.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -135,11 +138,11 @@ export default function CommandPalette() {
         </div>
         <div style={{ maxHeight: 320, overflowY: 'auto', padding: '4px 0' }}>
           {filtered.length === 0 && (
-            <div style={{ padding: '16px', color: '#888', textAlign: 'center', fontSize: 12 }}>No matching commands</div>
+            <div style={{ padding: '16px', color: '#888', textAlign: 'center', fontSize: 12 }}>{t('cmd.noMatch')}</div>
           )}
           {filtered.map((cmd, i) => (
             <div
-              key={cmd.label}
+              key={cmd.labelKey}
               onClick={() => runCommand(cmd)}
               onMouseEnter={() => setSelected(i)}
               style={{
@@ -150,7 +153,7 @@ export default function CommandPalette() {
                 color: i === selected ? '#fff' : '#e0e0e0',
               }}
             >
-              {cmd.label}
+              {translate(language, cmd.labelKey)}
             </div>
           ))}
         </div>

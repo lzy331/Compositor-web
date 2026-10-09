@@ -1,13 +1,16 @@
 import { useRef, useEffect } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { useT, translateLayerName } from '@/i18n';
 import { renderLayerThumbnail } from '@/engine/renderer';
 import { BLEND_MODES } from '@/engine/blendModes';
 import type { LayerData } from '@/types';
 
 export default function LayersPanel() {
-  const { projects, activeProjectId, selectLayer, setLayerVisibility, addLayer, deleteLayer, duplicateLayer, setLayerBlendMode, setLayerOpacity, renameLayer } = useEditorStore();
+  const { projects, activeProjectId, selectLayer, setLayerVisibility, addLayer, deleteLayer, duplicateLayer, setLayerBlendMode, setLayerOpacity } = useEditorStore();
   const project = projects.find(p => p.id === activeProjectId);
   const thumbRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  const t = useT();
+  const language = useEditorStore((s) => s.language);
 
   useEffect(() => {
     if (!project) return;
@@ -40,17 +43,17 @@ export default function LayersPanel() {
   return (
     <div className="panel" style={{ flex: 1, minHeight: 0 }}>
       <div className="panel-header">
-        <span>Layers</span>
+        <span>{t('panel.layers')}</span>
         <div style={{ display: 'flex', gap: 4 }}>
-          <span style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => addLayer('pixel')} title="New Layer">＋</span>
+          <span style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => addLayer('pixel')} title={t('layers.newLayer')}>＋</span>
           <span style={{ cursor: 'pointer', fontSize: 12 }} onClick={() => {
             const l = project.layers.find(l => l.id === project.activeLayerId);
             if (l) duplicateLayer(l.id);
-          }} title="Duplicate Layer">⧉</span>
+          }} title={t('layers.duplicateLayer')}>⧉</span>
           <span style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => {
             const l = project.layers.find(l => l.id === project.activeLayerId);
             if (l && project.layers.length > 1) deleteLayer(l.id);
-          }} title="Delete Layer">🗑</span>
+          }} title={t('layers.deleteLayer')}>🗑</span>
         </div>
       </div>
       <div className="panel-body" style={{ flex: 1, overflowY: 'auto' }}>
@@ -63,7 +66,7 @@ export default function LayersPanel() {
             <span
               className="layer-vis"
               onClick={(e) => { e.stopPropagation(); setLayerVisibility(layer.id, !layer.visible); }}
-              title={layer.visible ? 'Hide' : 'Show'}
+              title={layer.visible ? t('layers.hide') : t('layers.show')}
             >
               {layer.visible ? '👁' : '—'}
             </span>
@@ -75,10 +78,10 @@ export default function LayersPanel() {
               />
             </div>
             <div className="layer-info">
-              <div className="layer-name">{layer.name}</div>
+              <div className="layer-name">{translateLayerName(language, layer.name)}</div>
             </div>
             {layer.mask && layer.maskEnabled && (
-              <span className="layer-badge" title="Layer Mask">◐</span>
+              <span className="layer-badge" title={t('layers.layerMask')}>◐</span>
             )}
             {getTypeBadge(layer) && (
               <span className="layer-badge">{getTypeBadge(layer)}</span>
@@ -89,7 +92,7 @@ export default function LayersPanel() {
       {/* Layer blend mode & opacity */}
       <div style={{ padding: '6px 8px', borderTop: '1px solid #333', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div className="prop-row" style={{ marginBottom: 0 }}>
-          <span className="prop-label">Mode</span>
+          <span className="prop-label">{t('layers.mode')}</span>
           <select
             className="prop-input"
             value={project.layers.find(l => l.id === project.activeLayerId)?.blendMode || 'normal'}
@@ -98,11 +101,11 @@ export default function LayersPanel() {
               if (l) setLayerBlendMode(l.id, e.target.value as any);
             }}
           >
-            {BLEND_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+            {BLEND_MODES.map(m => <option key={m} value={m}>{t('blend.' + m)}</option>)}
           </select>
         </div>
         <div className="prop-row" style={{ marginBottom: 0 }}>
-          <span className="prop-label">Opacity</span>
+          <span className="prop-label">{t('layers.opacity')}</span>
           <input
             type="range"
             className="prop-slider"

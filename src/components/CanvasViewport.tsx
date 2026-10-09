@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useEditorStore } from '@/store/editorStore';
+import { useT } from '@/i18n';
 import { renderProject } from '@/engine/renderer';
 import { floodFill, magicWandSelect } from '@/engine/filters';
 import { hexToRgb } from '@/engine/colorUtils';
@@ -17,6 +18,7 @@ export default function CanvasViewport() {
   const lassoPoints = useRef<{ x: number; y: number }[]>([]);
   const gradientStart = useRef<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState(0);
+  const t = useT();
 
   const store = useEditorStore();
   const activeProject = store.projects.find(p => p.id === store.activeProjectId);
@@ -452,7 +454,7 @@ export default function CanvasViewport() {
   }, []);
 
   if (!activeProject) {
-    return <div className="canvas-area"><div style={{ color: '#666', fontSize: 14 }}>No project open.</div></div>;
+    return <div className="canvas-area"><div style={{ color: '#666', fontSize: 14 }}>{t('status.noProject')}</div></div>;
   }
 
   const displayWidth = activeProject.width * activeProject.zoom;
@@ -485,15 +487,15 @@ export default function CanvasViewport() {
               onChange={(e) => store.setCropRatio(e.target.value === 'free' ? null : e.target.value)}
               style={{ background: '#2a2a2a', border: '1px solid #444', color: '#fff', borderRadius: 3, fontSize: 11, padding: '2px 4px' }}
             >
-              <option value="free">Free</option>
+              <option value="free">{t('crop.free')}</option>
               <option value="1:1">1:1</option>
               <option value="3:4">3:4</option>
               <option value="4:3">4:3</option>
               <option value="9:16">9:16</option>
               <option value="16:9">16:9</option>
             </select>
-            <button className="btn btn-primary" style={{ padding: '2px 10px', fontSize: 11 }} onClick={() => store.applyCrop()}>Apply</button>
-            <button className="btn" style={{ padding: '2px 10px', fontSize: 11 }} onClick={() => store.cancelCrop()}>Cancel</button>
+            <button className="btn btn-primary" style={{ padding: '2px 10px', fontSize: 11 }} onClick={() => store.applyCrop()}>{t('crop.apply')}</button>
+            <button className="btn" style={{ padding: '2px 10px', fontSize: 11 }} onClick={() => store.cancelCrop()}>{t('crop.cancel')}</button>
           </div>
         )}
       </div>
