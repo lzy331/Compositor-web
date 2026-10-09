@@ -128,7 +128,7 @@ export interface ProjectState {
 }
 
 export interface DialogState {
-  type: 'levels' | 'curves' | 'hsl' | 'imageSize' | 'canvasSize' | 'new' | null;
+  type: 'levels' | 'curves' | 'hsl' | 'imageSize' | 'canvasSize' | 'new' | 'shortcuts' | null;
 }
 
 export interface AppState {
@@ -136,11 +136,13 @@ export interface AppState {
   activeProjectId: string | null;
   tool: ToolState;
   selection: Selection | null;
+  lastSelection: Selection | null;
   history: HistoryEntry[];
   historyIndex: number;
   clipboard: LayerData | null;
   showRulers: boolean;
   showGrid: boolean;
+  showGuides: boolean;
   gridSize: number;
   fullscreen: boolean;
   showNavigator: boolean;

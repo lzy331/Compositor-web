@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { useT } from '@/i18n';
+import { exportProject, openImageFile } from '@/utils/fileIO';
 import type { Language } from '@/types';
 
 type MenuItem = { labelKey?: string; shortcut?: string; action?: string; divider?: boolean };
@@ -11,8 +12,10 @@ const MENUS: { labelKey: string; items: MenuItem[] }[] = [
       { labelKey: 'menu.new', shortcut: 'Ctrl+N', action: 'new' },
       { labelKey: 'menu.open', shortcut: 'Ctrl+O', action: 'open' },
       { divider: true },
-      { labelKey: 'menu.exportPng', shortcut: 'Ctrl+E', action: 'exportPng' },
-      { labelKey: 'menu.exportJpeg', shortcut: 'Ctrl+Shift+E', action: 'exportJpeg' },
+      { labelKey: 'menu.exportPng', shortcut: 'Ctrl+S', action: 'exportPng' },
+      { labelKey: 'menu.exportJpeg', shortcut: 'Ctrl+Shift+S', action: 'exportJpeg' },
+      { divider: true },
+      { labelKey: 'sc.closeProject', shortcut: 'Ctrl+W', action: 'closeProject' },
     ],
   },
   {
@@ -22,6 +25,7 @@ const MENUS: { labelKey: string; items: MenuItem[] }[] = [
       { labelKey: 'menu.redo', shortcut: 'Ctrl+Shift+Z', action: 'redo' },
       { divider: true },
       { labelKey: 'menu.copyLayer', shortcut: 'Ctrl+C', action: 'copy' },
+      { labelKey: 'sc.cutLayer', shortcut: 'Ctrl+X', action: 'cut' },
       { labelKey: 'menu.pasteLayer', shortcut: 'Ctrl+V', action: 'paste' },
     ],
   },
@@ -33,7 +37,13 @@ const MENUS: { labelKey: string; items: MenuItem[] }[] = [
       { labelKey: 'menu.deleteLayer', shortcut: 'Del', action: 'delete' },
       { divider: true },
       { labelKey: 'menu.mergeDown', shortcut: 'Ctrl+E', action: 'mergeDown' },
+      { labelKey: 'sc.mergeVisible', shortcut: 'Ctrl+Shift+E', action: 'mergeVisible' },
       { labelKey: 'menu.addMask', action: 'addMask' },
+      { divider: true },
+      { labelKey: 'sc.bringForward', shortcut: 'Ctrl+]', action: 'bringForward' },
+      { labelKey: 'sc.sendBackward', shortcut: 'Ctrl+[', action: 'sendBackward' },
+      { labelKey: 'sc.bringFront', shortcut: 'Ctrl+Shift+]', action: 'bringFront' },
+      { labelKey: 'sc.sendBack', shortcut: 'Ctrl+Shift+[', action: 'sendBack' },
       { divider: true },
       { labelKey: 'menu.flipH', action: 'flipH' },
       { labelKey: 'menu.flipV', action: 'flipV' },
@@ -48,14 +58,14 @@ const MENUS: { labelKey: string; items: MenuItem[] }[] = [
   {
     labelKey: 'menu.image',
     items: [
-      { labelKey: 'menu.imageSize', action: 'imageSize' },
-      { labelKey: 'menu.canvasSize', action: 'canvasSize' },
+      { labelKey: 'menu.imageSize', shortcut: 'Ctrl+Alt+I', action: 'imageSize' },
+      { labelKey: 'menu.canvasSize', shortcut: 'Ctrl+Alt+C', action: 'canvasSize' },
       { divider: true },
-      { labelKey: 'menu.adjLevels', action: 'dialog-levels' },
-      { labelKey: 'menu.adjCurves', action: 'dialog-curves' },
-      { labelKey: 'menu.adjHsl', action: 'dialog-hsl' },
-      { labelKey: 'menu.adjInvert', action: 'adjust-invert' },
-      { labelKey: 'menu.adjBw', action: 'adjust-bw' },
+      { labelKey: 'menu.adjLevels', shortcut: 'Ctrl+L', action: 'dialog-levels' },
+      { labelKey: 'menu.adjCurves', shortcut: 'Ctrl+M', action: 'dialog-curves' },
+      { labelKey: 'menu.adjHsl', shortcut: 'Ctrl+U', action: 'dialog-hsl' },
+      { labelKey: 'menu.adjInvert', shortcut: 'Ctrl+I', action: 'adjust-invert' },
+      { labelKey: 'menu.adjBw', shortcut: 'Ctrl+Shift+U', action: 'adjust-bw' },
       { divider: true },
       { labelKey: 'menu.blurGaussian', action: 'filter-gaussian' },
       { labelKey: 'menu.blurMotion', action: 'filter-motion' },
@@ -70,6 +80,7 @@ const MENUS: { labelKey: string; items: MenuItem[] }[] = [
     items: [
       { labelKey: 'menu.selectAll', shortcut: 'Ctrl+A', action: 'selectAll' },
       { labelKey: 'menu.deselect', shortcut: 'Ctrl+D', action: 'deselect' },
+      { labelKey: 'sc.reselect', shortcut: 'Ctrl+Shift+D', action: 'reselect' },
     ],
   },
   {
@@ -77,20 +88,22 @@ const MENUS: { labelKey: string; items: MenuItem[] }[] = [
     items: [
       { labelKey: 'menu.zoomIn', shortcut: 'Ctrl++', action: 'zoomIn' },
       { labelKey: 'menu.zoomOut', shortcut: 'Ctrl+-', action: 'zoomOut' },
+      { labelKey: 'sc.actualPixels', shortcut: 'Ctrl+1', action: 'actualPixels' },
       { labelKey: 'menu.fitScreen', shortcut: 'Ctrl+0', action: 'fitScreen' },
       { divider: true },
       { labelKey: 'menu.rulers', shortcut: 'Ctrl+R', action: 'toggleRulers' },
-      { labelKey: 'menu.grid', action: 'toggleGrid' },
+      { labelKey: 'menu.grid', shortcut: "Ctrl+'", action: 'toggleGrid' },
+      { labelKey: 'sc.guides', shortcut: 'Ctrl+;', action: 'toggleGuides' },
       { labelKey: 'menu.navigator', action: 'toggleNavigator' },
-      { labelKey: 'menu.fullscreen', shortcut: 'F', action: 'fullscreen' },
       { divider: true },
+      { labelKey: 'menu.fullscreen', shortcut: 'F', action: 'fullscreen' },
       { labelKey: 'menu.clearGuides', action: 'clearGuides' },
     ],
   },
   {
     labelKey: 'menu.help',
     items: [
-      { labelKey: 'menu.shortcuts', action: 'shortcuts' },
+      { labelKey: 'menu.shortcuts', shortcut: '?', action: 'shortcuts' },
       { labelKey: 'menu.about', action: 'about' },
     ],
   },
@@ -116,34 +129,48 @@ export default function MenuBar() {
   const handleAction = (action: string) => {
     setOpenMenu(null);
     const s = useEditorStore.getState();
+    const activeId = (() => {
+      const p = s.projects.find(pr => pr.id === s.activeProjectId);
+      return p?.activeLayerId ?? null;
+    })();
     switch (action) {
       case 'new': s.setDialog('new'); break;
-      case 'open': handleOpenFile(); break;
-      case 'exportPng': handleExport('png'); break;
-      case 'exportJpeg': handleExport('jpeg'); break;
+      case 'open': openImageFile(); break;
+      case 'exportPng': exportProject('png'); break;
+      case 'exportJpeg': exportProject('jpeg'); break;
+      case 'closeProject': {
+        const p = s.projects.find(pr => pr.id === s.activeProjectId);
+        if (p) s.closeProject(p.id);
+        break;
+      }
       case 'undo': s.undo(); break;
       case 'redo': s.redo(); break;
       case 'copy': {
-        const p = s.projects.find(p => p.id === s.activeProjectId);
-        if (p?.activeLayerId) s.copyLayer(p.activeLayerId);
+        if (activeId) s.copyLayer(activeId);
+        break;
+      }
+      case 'cut': {
+        if (activeId) { s.copyLayer(activeId); s.deleteLayer(activeId); }
         break;
       }
       case 'paste': s.pasteLayer(); break;
       case 'addLayer': s.addLayer('pixel'); break;
       case 'duplicate': {
-        const p = s.projects.find(p => p.id === s.activeProjectId);
-        if (p?.activeLayerId) s.duplicateLayer(p.activeLayerId);
+        if (activeId) s.duplicateLayer(activeId);
         break;
       }
       case 'delete': {
-        const p = s.projects.find(p => p.id === s.activeProjectId);
-        if (p?.activeLayerId) s.deleteLayer(p.activeLayerId);
+        if (activeId) s.deleteLayer(activeId);
         break;
       }
       case 'mergeDown': s.mergeDown(); break;
+      case 'mergeVisible': s.mergeVisible(); break;
+      case 'bringForward': if (activeId) s.moveLayer(activeId, 'up'); break;
+      case 'sendBackward': if (activeId) s.moveLayer(activeId, 'down'); break;
+      case 'bringFront': if (activeId) s.moveLayer(activeId, 'top'); break;
+      case 'sendBack': if (activeId) s.moveLayer(activeId, 'bottom'); break;
       case 'addMask': {
-        const p = s.projects.find(p => p.id === s.activeProjectId);
-        if (p?.activeLayerId) s.addLayerMask(p.activeLayerId);
+        if (activeId) s.addLayerMask(activeId);
         break;
       }
       case 'selectAll': {
@@ -152,6 +179,9 @@ export default function MenuBar() {
         break;
       }
       case 'deselect': s.setSelection(null); break;
+      case 'reselect': s.reselect(); break;
+      case 'actualPixels': s.setZoom(1); break;
+      case 'toggleGuides': s.toggleGuides(); break;
       case 'zoomIn': {
         s.zoomIn();
         break;
@@ -244,6 +274,10 @@ export default function MenuBar() {
         });
         break;
       }
+      case 'shortcuts': {
+        s.setDialog('shortcuts');
+        break;
+      }
       case 'about': {
         const lang = useEditorStore.getState().language;
         alert(lang === 'zh'
@@ -251,47 +285,7 @@ export default function MenuBar() {
           : 'Compositor Web v0.1.0\nA web-based image editor inspired by Compositor for macOS.\nBuilt with React + TypeScript + Canvas.');
         break;
       }
-      case 'shortcuts': {
-        const lang = useEditorStore.getState().language;
-        alert(lang === 'zh'
-          ? '快捷键：\nV 移动  M 选框  L 套索  W 魔棒  C 裁剪  I 吸管\nB 画笔  E 橡皮  G 填充  U 形状  T 文字  S 仿制图章\nR 模糊  H 抓手  Z 缩放\n[ ] 调整画笔大小\n方向键 微调位置（Shift 10px）  空格 拖动画布\nCtrl+Z 撤销  Ctrl+Shift+Z 重做\nCtrl+A 全选  Ctrl+D 取消选择  Ctrl+J 复制图层\nCtrl+F 命令面板  Ctrl+T 变换  F 全屏\nCtrl+0 适合屏幕  Ctrl+加号/减号 缩放\n回车 应用变换/裁剪  Esc 取消'
-          : 'Shortcuts:\nV Move  M Marquee  L Lasso  W Magic Wand  C Crop  I Eyedropper\nB Brush  E Eraser  G Fill  U Shape  T Type  S Clone Stamp\nR Blur  H Hand  Z Zoom\n[ ] Adjust brush size\nArrow keys Nudge (Shift = 10px)  Space + drag to pan\nCtrl+Z Undo  Ctrl+Shift+Z Redo\nCtrl+A Select All  Ctrl+D Deselect  Ctrl+J Duplicate Layer\nCtrl+F Command Palette  Ctrl+T Transform  F Fullscreen\nCtrl+0 Fit to screen  Ctrl+Plus/Minus Zoom\nEnter Apply transform/crop  Esc Cancel');
-        break;
-      }
     }
-  };
-
-  const handleOpenFile = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        useEditorStore.getState().openImage(file.name.replace(/\.[^.]+$/, ''), img);
-      };
-      img.src = URL.createObjectURL(file);
-    };
-    input.click();
-  };
-
-  const handleExport = (format: 'png' | 'jpeg') => {
-    const s = useEditorStore.getState();
-    const p = s.projects.find(p => p.id === s.activeProjectId);
-    if (!p) return;
-    const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = p.width;
-    exportCanvas.height = p.height;
-    const ctx = exportCanvas.getContext('2d')!;
-    import('@/engine/renderer').then(({ renderProject }) => {
-      renderProject(p, ctx, p.width, p.height);
-      const link = document.createElement('a');
-      link.download = `${p.name}.${format}`;
-      link.href = exportCanvas.toDataURL(format === 'jpeg' ? 'image/jpeg' : 'image/png', 0.92);
-      link.click();
-    });
   };
 
   return (

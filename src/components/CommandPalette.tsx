@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { useT, translate } from '@/i18n';
 import { applyAdjustment } from '@/engine/filters';
-import { renderProject } from '@/engine/renderer';
+import { exportProject, openImageFile } from '@/utils/fileIO';
 
 interface CommandItem {
   labelKey: string;
@@ -59,9 +59,9 @@ export default function CommandPalette() {
 
     return [
       { labelKey: 'cmd.newProject', keywords: 'new create 新建 创建', run: () => s.setDialog('new') },
-      { labelKey: 'cmd.open', keywords: 'open file image import 打开 文件 导入', run: () => handleOpenFile() },
-      { labelKey: 'cmd.exportPng', keywords: 'export save png 导出 保存', run: () => handleExport('png') },
-      { labelKey: 'cmd.exportJpeg', keywords: 'export save jpeg jpg 导出 保存', run: () => handleExport('jpeg') },
+      { labelKey: 'cmd.open', keywords: 'open file image import 打开 文件 导入', run: () => openImageFile() },
+      { labelKey: 'cmd.exportPng', keywords: 'export save png 导出 保存', run: () => exportProject('png') },
+      { labelKey: 'cmd.exportJpeg', keywords: 'export save jpeg jpg 导出 保存', run: () => exportProject('jpeg') },
       { labelKey: 'cmd.undo', keywords: 'undo revert 撤销', run: () => s.undo() },
       { labelKey: 'cmd.redo', keywords: 'redo 重做', run: () => s.redo() },
       { labelKey: 'cmd.duplicateLayer', keywords: 'duplicate layer copy 复制 图层', run: () => { const p = getProject(); if (p?.activeLayerId) s.duplicateLayer(p.activeLayerId); } },
@@ -160,35 +160,4 @@ export default function CommandPalette() {
       </div>
     </div>
   );
-}
-
-function handleOpenFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    const img = new Image();
-    img.onload = () => {
-      useEditorStore.getState().openImage(file.name.replace(/\.[^.]+$/, ''), img);
-    };
-    img.src = URL.createObjectURL(file);
-  };
-  input.click();
-}
-
-function handleExport(format: 'png' | 'jpeg') {
-  const s = useEditorStore.getState();
-  const p = s.projects.find((pr) => pr.id === s.activeProjectId);
-  if (!p) return;
-  const exportCanvas = document.createElement('canvas');
-  exportCanvas.width = p.width;
-  exportCanvas.height = p.height;
-  const ctx = exportCanvas.getContext('2d')!;
-  renderProject(p, ctx, p.width, p.height);
-  const link = document.createElement('a');
-  link.download = `${p.name}.${format}`;
-  link.href = exportCanvas.toDataURL(format === 'jpeg' ? 'image/jpeg' : 'image/png', 0.92);
-  link.click();
 }

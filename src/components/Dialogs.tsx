@@ -3,6 +3,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { useT } from '@/i18n';
 import { applyAdjustment } from '@/engine/filters';
 import type { AdjustmentSettings } from '@/types';
+import ShortcutsDialog from './ShortcutsDialog';
 
 export default function Dialogs() {
   const dialog = useEditorStore((s) => s.dialog);
@@ -11,13 +12,14 @@ export default function Dialogs() {
 
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) useEditorStore.getState().setDialog(null); }}>
-      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={dialog.type === 'shortcuts' ? { minWidth: 640, maxWidth: 720 } : undefined} onMouseDown={(e) => e.stopPropagation()}>
         {dialog.type === 'new' && <NewDialog />}
         {dialog.type === 'imageSize' && <SizeDialog titleKey="dlg.imageSize" mode="image" />}
         {dialog.type === 'canvasSize' && <SizeDialog titleKey="dlg.canvasSize" mode="canvas" />}
         {dialog.type === 'levels' && <LevelsDialog />}
         {dialog.type === 'curves' && <CurvesDialog />}
         {dialog.type === 'hsl' && <HslDialog />}
+        {dialog.type === 'shortcuts' && <ShortcutsDialog />}
       </div>
     </div>
   );

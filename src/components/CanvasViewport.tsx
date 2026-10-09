@@ -2,9 +2,33 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { useT } from '@/i18n';
 import { renderProject } from '@/engine/renderer';
-import { floodFill, magicWandSelect } from '@/engine/filters';
+import { floodFill, magicWandSelect, applyAdjustment } from '@/engine/filters';
 import { hexToRgb } from '@/engine/colorUtils';
-import type { LayerData } from '@/types';
+import { exportProject, openImageFile } from '@/utils/fileIO';
+import type { LayerData, AdjustmentSettings } from '@/types';
+
+// Apply an adjustment to the active layer's pixels (used by Ctrl+I / Ctrl+Shift+U).
+function applyActiveAdjustment(type: AdjustmentSettings['type'], params: Record<string, any>, description: string): void {
+  const s = useEditorStore.getState();
+  const p = s.projects.find((pr) => pr.id === s.activeProjectId);
+  if (!p || !p.activeLayerId) return;
+  const layer = p.layers.find((l) => l.id === p.activeLayerId);
+  if (!layer?.canvas) return;
+  const ctx = layer.canvas.getContext('2d');
+  if (!ctx) return;
+  s.pushHistory(description);
+  const imgData = ctx.getImageData(0, 0, layer.width, layer.height);
+  ctx.putImageData(applyAdjustment(imgData, { type, params }), 0, 0);
+}
+
+// Choose a ruler tick spacing so ticks are at least ~50 screen px apart.
+function pickRulerStep(zoom: number): number {
+  const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
+  for (const s of steps) {
+    if (s * zoom >= 50) return s;
+  }
+  return 10000;
+}
 
 export default function CanvasViewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,7 +42,11 @@ export default function CanvasViewport() {
   const lassoPoints = useRef<{ x: number; y: number }[]>([]);
   const gradientStart = useRef<{ x: number; y: number } | null>(null);
   const cursorPos = useRef<{ x: number; y: number } | null>(null);
+  const lastStrokeEnd = useRef<{ x: number; y: number } | null>(null);
   const spaceDown = useRef(false);
+  const rulerHRef = useRef<HTMLCanvasElement>(null);
+  const rulerVRef = useRef<HTMLCanvasElement>(null);
+  const guideDrag = useRef<{ orientation: 'horizontal' | 'vertical'; pos: number | null } | null>(null);
   const [, forceUpdate] = useState(0);
   const t = useT();
 
@@ -56,13 +84,15 @@ export default function CanvasViewport() {
     }
 
     // Guides
-    for (const g of activeProject.guides) {
-      octx.strokeStyle = '#3a8ee6';
-      octx.lineWidth = 1;
-      octx.beginPath();
-      if (g.orientation === 'vertical') { octx.moveTo(g.position, 0); octx.lineTo(g.position, activeProject.height); }
-      else { octx.moveTo(0, g.position); octx.lineTo(activeProject.width, g.position); }
-      octx.stroke();
+    if (store.showGuides) {
+      for (const g of activeProject.guides) {
+        octx.strokeStyle = '#3a8ee6';
+        octx.lineWidth = 1;
+        octx.beginPath();
+        if (g.orientation === 'vertical') { octx.moveTo(g.position, 0); octx.lineTo(g.position, activeProject.height); }
+        else { octx.moveTo(0, g.position); octx.lineTo(activeProject.width, g.position); }
+        octx.stroke();
+      }
     }
 
     // Selection marching ants
@@ -160,6 +190,22 @@ export default function CanvasViewport() {
         octx.restore();
       }
     }
+
+    // Guide being dragged out of a ruler
+    const gd = guideDrag.current;
+    if (gd && gd.pos !== null) {
+      octx.save();
+      octx.strokeStyle = '#3a8ee6';
+      octx.lineWidth = 1 / (activeProject.zoom || 1);
+      octx.beginPath();
+      if (gd.orientation === 'horizontal') { octx.moveTo(0, gd.pos); octx.lineTo(activeProject.width, gd.pos); }
+      else { octx.moveTo(gd.pos, 0); octx.lineTo(gd.pos, activeProject.height); }
+      octx.stroke();
+      octx.restore();
+    }
+
+    // Rulers (screen-space, drawn on the canvas-area overlay)
+    drawRulers();
   });
 
   function getHandles(layer: LayerData) {
@@ -171,7 +217,126 @@ export default function CanvasViewport() {
     ];
   }
 
-  useEffect(() => { forceUpdate(n => n + 1); }, [store.projects, store.selection, store.tool, store.transform, store.crop, store.showGrid, store.showNavigator]);
+  // Draw the top and left rulers in screen space (they follow zoom + pan).
+  function drawRulers() {
+    if (!store.showRulers || !activeProject) return;
+    const container = containerRef.current;
+    const rcH = rulerHRef.current;
+    const rcV = rulerVRef.current;
+    if (!container || !rcH || !rcV) return;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const R = 20;
+    const zoom = activeProject.zoom || 1;
+    const originX = (cw - activeProject.width * zoom) / 2 + activeProject.panX;
+    const originY = (ch - activeProject.height * zoom) / 2 + activeProject.panY;
+    const step = pickRulerStep(zoom);
+
+    // Horizontal ruler
+    if (rcH.width !== cw) rcH.width = cw;
+    if (rcH.height !== R) rcH.height = R;
+    const h = rcH.getContext('2d');
+    if (h) {
+      h.clearRect(0, 0, cw, R);
+      h.fillStyle = '#252525';
+      h.fillRect(0, 0, cw, R);
+      h.strokeStyle = '#4a4a4a';
+      h.fillStyle = '#909090';
+      h.font = '9px sans-serif';
+      h.textBaseline = 'top';
+      h.beginPath();
+      const hStart = Math.floor(((0 - originX) / zoom) / step) * step;
+      const hEnd = Math.ceil(((cw - originX) / zoom) / step) * step;
+      for (let d = hStart; d <= hEnd; d += step) {
+        const x = Math.round(originX + d * zoom) + 0.5;
+        if (x < 0 || x > cw) continue;
+        h.moveTo(x, R);
+        h.lineTo(x, R - 7);
+        h.fillText(String(d), x + 2, 1);
+      }
+      h.stroke();
+      h.strokeStyle = '#3a3a3a';
+      h.beginPath(); h.moveTo(0, R - 0.5); h.lineTo(cw, R - 0.5); h.stroke();
+    }
+
+    // Vertical ruler
+    if (rcV.height !== ch) rcV.height = ch;
+    if (rcV.width !== R) rcV.width = R;
+    const v = rcV.getContext('2d');
+    if (v) {
+      v.clearRect(0, 0, R, ch);
+      v.fillStyle = '#252525';
+      v.fillRect(0, 0, R, ch);
+      v.strokeStyle = '#4a4a4a';
+      v.fillStyle = '#909090';
+      v.font = '9px sans-serif';
+      v.beginPath();
+      const vStart = Math.floor(((0 - originY) / zoom) / step) * step;
+      const vEnd = Math.ceil(((ch - originY) / zoom) / step) * step;
+      for (let d = vStart; d <= vEnd; d += step) {
+        const y = Math.round(originY + d * zoom) + 0.5;
+        if (y < 0 || y > ch) continue;
+        v.moveTo(R, y);
+        v.lineTo(R - 7, y);
+        v.save();
+        v.translate(R - 2, y - 2);
+        v.rotate(-Math.PI / 2);
+        v.textAlign = 'left';
+        v.textBaseline = 'bottom';
+        v.fillText(String(d), 0, 0);
+        v.restore();
+      }
+      v.stroke();
+      v.strokeStyle = '#3a3a3a';
+      v.beginPath(); v.moveTo(R - 0.5, 0); v.lineTo(R - 0.5, ch); v.stroke();
+    }
+  }
+
+  // Drag out of a ruler to create a guide.
+  const startGuideDrag = (orientation: 'horizontal' | 'vertical') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container || !activeProject) return;
+    const rect = container.getBoundingClientRect();
+    const zoom = activeProject.zoom || 1;
+    const computePos = (clientX: number, clientY: number): number => {
+      if (orientation === 'horizontal') {
+        const originY = (container.clientHeight - activeProject.height * zoom) / 2 + activeProject.panY;
+        return Math.round((clientY - rect.top - originY) / zoom);
+      }
+      const originX = (container.clientWidth - activeProject.width * zoom) / 2 + activeProject.panX;
+      return Math.round((clientX - rect.left - originX) / zoom);
+    };
+    guideDrag.current = { orientation, pos: computePos(e.clientX, e.clientY) };
+    forceUpdate(n => n + 1);
+    const onMove = (ev: MouseEvent) => {
+      if (!guideDrag.current) return;
+      guideDrag.current.pos = computePos(ev.clientX, ev.clientY);
+      forceUpdate(n => n + 1);
+    };
+    const onUp = () => {
+      const g = guideDrag.current;
+      if (g && g.pos !== null) {
+        const limit = orientation === 'horizontal' ? activeProject.height : activeProject.width;
+        if (g.pos >= 0 && g.pos <= limit) useEditorStore.getState().addGuide(orientation, g.pos);
+      }
+      guideDrag.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      forceUpdate(n => n + 1);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // Re-render on viewport resize so the rulers stay correct.
+  useEffect(() => {
+    const onResize = () => forceUpdate(n => n + 1);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => { forceUpdate(n => n + 1); }, [store.projects, store.selection, store.tool, store.transform, store.crop, store.showGrid, store.showNavigator, store.showRulers, store.showGuides, activeProject?.zoom, activeProject?.panX, activeProject?.panY]);
 
   const getCanvasPos = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -257,9 +422,19 @@ export default function CanvasViewport() {
       return;
     }
     if ((tool.id === 'brush' || tool.id === 'eraser' || tool.id === 'blur' || tool.id === 'clone') && layer?.canvas) {
+      // Shift+click draws a straight line from the end of the last stroke.
+      if (e.shiftKey && lastStrokeEnd.current && (tool.id === 'brush' || tool.id === 'eraser')) {
+        store.pushHistory(tool.id === 'eraser' ? 'Erase' : 'Paint');
+        drawBrushStroke(lastStrokeEnd.current, pos);
+        lastStrokeEnd.current = pos;
+        forceUpdate(n => n + 1);
+        return;
+      }
       isDrawing.current = true; lastPos.current = pos;
       if (tool.id !== 'clone' || cloneSource.current) store.pushHistory(tool.id === 'eraser' ? 'Erase' : 'Paint');
-      drawBrushStroke(pos, pos); forceUpdate(n => n + 1); return;
+      drawBrushStroke(pos, pos);
+      lastStrokeEnd.current = pos;
+      forceUpdate(n => n + 1); return;
     }
     if (tool.id === 'text') {
       // Clicking inside an existing text layer selects it for editing
@@ -368,6 +543,7 @@ export default function CanvasViewport() {
         drawBrushStroke(lastPos.current, pos);
       }
       lastPos.current = pos; forceUpdate(n => n + 1);
+      lastStrokeEnd.current = pos;
     }
   }, [getCanvasPos, getActiveLayer, store, activeProject, drawBrushStroke]);
 
@@ -438,14 +614,14 @@ export default function CanvasViewport() {
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
+    if (e.ctrlKey || e.metaKey || e.altKey) {
       store.setZoom(Math.max(0.05, Math.min(16, activeProject!.zoom * (e.deltaY > 0 ? 0.9 : 1.1))));
     } else {
       store.setPan(activeProject!.panX - e.deltaX, activeProject!.panY - e.deltaY);
     }
   }, [store, activeProject]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (Photoshop-style)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -453,22 +629,106 @@ export default function CanvasViewport() {
       const s = useEditorStore.getState();
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
+      const p = s.projects.find((pr: any) => pr.id === s.activeProjectId);
+      const activeId = p?.activeLayerId ?? null;
 
-      if (ctrl && key === 'f') { e.preventDefault(); s.setCommandPaletteOpen(true); return; }
-      if (ctrl && key === '0') { e.preventDefault(); s.fitToScreen(); return; }
-      if (ctrl && (key === '=' || key === '+')) { e.preventDefault(); s.zoomIn(); return; }
-      if (ctrl && key === '-') { e.preventDefault(); s.zoomOut(); return; }
+      // ---- Always available ----
+      if (key === 'escape') {
+        if (s.transform?.active) s.cancelTransform();
+        if (s.crop?.active) s.cancelCrop();
+        s.setCommandPaletteOpen(false);
+        s.setDialog(null);
+        return;
+      }
+      if (key === 'enter' || key === 'return') {
+        if (s.transform?.active) s.applyTransform();
+        if (s.crop?.active) s.applyCrop();
+        return;
+      }
       if (key === ' ') { e.preventDefault(); spaceDown.current = true; return; }
-      if (ctrl && key === 't') { e.preventDefault(); s.beginTransform(); return; }
+
+      // ---- File ----
+      if (ctrl && !e.shiftKey && !e.altKey && key === 'n') { e.preventDefault(); s.setDialog('new'); return; }
+      if (ctrl && key === 'o') { e.preventDefault(); openImageFile(); return; }
+      if (ctrl && !e.shiftKey && key === 's') { e.preventDefault(); exportProject('png'); return; }
+      if (ctrl && e.shiftKey && key === 's') { e.preventDefault(); exportProject('jpeg'); return; }
+      if (ctrl && key === 'w') { e.preventDefault(); if (p) s.closeProject(p.id); return; }
+
+      // ---- Edit ----
       if (ctrl && key === 'z') { e.preventDefault(); e.shiftKey ? s.redo() : s.undo(); return; }
+      if (ctrl && key === 'y') { e.preventDefault(); s.redo(); return; }
+      if (ctrl && key === 'c') { e.preventDefault(); if (activeId) s.copyLayer(activeId); return; }
+      if (ctrl && key === 'x') {
+        e.preventDefault();
+        if (activeId) { s.copyLayer(activeId); s.deleteLayer(activeId); }
+        return;
+      }
+      if (ctrl && key === 'v') { e.preventDefault(); s.pasteLayer(); return; }
+      if (ctrl && e.altKey && key === 'i') { e.preventDefault(); s.setDialog('imageSize'); return; }
+      if (ctrl && e.altKey && key === 'c') { e.preventDefault(); s.setDialog('canvasSize'); return; }
+      if (ctrl && key === 't') { e.preventDefault(); s.beginTransform(); return; }
+
+      // ---- Select ----
       if (ctrl && key === 'a') {
         e.preventDefault();
-        const p = s.projects.find((p: any) => p.id === s.activeProjectId);
         if (p) s.setSelection({ x: 0, y: 0, width: p.width, height: p.height, type: 'rect' });
         return;
       }
+      if (ctrl && e.shiftKey && key === 'd') { e.preventDefault(); s.reselect(); return; }
       if (ctrl && key === 'd') { e.preventDefault(); s.setSelection(null); return; }
-      // Arrow keys nudge the active layer (Shift = 10px)
+
+      // ---- Fill / clear (Alt/Ctrl + Backspace) ----
+      if ((e.altKey || ctrl) && (key === 'backspace' || key === 'delete')) {
+        e.preventDefault();
+        s.pushHistory('Fill');
+        s.fillSelection(e.altKey ? 'foreground' : 'background');
+        forceUpdate(n => n + 1);
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        if (s.selection) {
+          s.pushHistory('Erase');
+          s.clearSelectionPixels();
+        } else if (activeId) {
+          s.deleteLayer(activeId);
+        }
+        return;
+      }
+
+      // ---- Layers ----
+      if (ctrl && e.shiftKey && key === 'n') { e.preventDefault(); s.addLayer('pixel'); return; }
+      if (ctrl && key === 'j') { e.preventDefault(); if (activeId) s.duplicateLayer(activeId); return; }
+      if (ctrl && e.shiftKey && key === 'e') { e.preventDefault(); s.pushHistory('Merge Visible'); s.mergeVisible(); return; }
+      if (ctrl && !e.shiftKey && key === 'e') { e.preventDefault(); if (activeId) s.mergeDown(); return; }
+      if (ctrl && key === ']') { e.preventDefault(); if (activeId) s.moveLayer(activeId, e.shiftKey ? 'top' : 'up'); return; }
+      if (ctrl && key === '[') { e.preventDefault(); if (activeId) s.moveLayer(activeId, e.shiftKey ? 'bottom' : 'down'); return; }
+      if (e.altKey && key === ']') { e.preventDefault(); s.selectLayerRelative(1); return; }
+      if (e.altKey && key === '[') { e.preventDefault(); s.selectLayerRelative(-1); return; }
+
+      // ---- View ----
+      if (ctrl && key === 'f') { e.preventDefault(); s.setCommandPaletteOpen(true); return; }
+      if (ctrl && key === '0') { e.preventDefault(); s.fitToScreen(); return; }
+      if (ctrl && key === '1') { e.preventDefault(); s.setZoom(1); return; }
+      if (ctrl && (key === '=' || key === '+')) { e.preventDefault(); s.zoomIn(); return; }
+      if (ctrl && key === '-') { e.preventDefault(); s.zoomOut(); return; }
+      if (ctrl && key === 'r') { e.preventDefault(); s.toggleRulers(); return; }
+      if (ctrl && (e.key === "'" || key === "'")) { e.preventDefault(); s.toggleGrid(); return; }
+      if (ctrl && e.key === ';') { e.preventDefault(); s.toggleGuides(); return; }
+
+      // ---- Adjustments ----
+      if (ctrl && key === 'l') { e.preventDefault(); s.setDialog('levels'); return; }
+      if (ctrl && key === 'm') { e.preventDefault(); s.setDialog('curves'); return; }
+      if (ctrl && key === 'u' && !e.shiftKey) { e.preventDefault(); s.setDialog('hsl'); return; }
+      if (ctrl && e.shiftKey && key === 'u') { e.preventDefault(); applyActiveAdjustment('bw', {}, 'Black & White'); forceUpdate(n => n + 1); return; }
+      if (ctrl && key === 'i') { e.preventDefault(); applyActiveAdjustment('invert', {}, 'Invert'); forceUpdate(n => n + 1); return; }
+
+      // ---- Panels / fullscreen ----
+      if (key === 'tab') { e.preventDefault(); s.toggleFullscreen(); return; }
+      if (!ctrl && !e.altKey && key === 'f') { s.toggleFullscreen(); return; }
+      if (e.key === '?') { e.preventDefault(); s.setDialog('shortcuts'); return; }
+
+      // ---- Arrow-key nudge ----
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         if (s.crop?.active || s.transform?.active) return;
         e.preventDefault();
@@ -478,36 +738,38 @@ export default function CanvasViewport() {
         s.nudgeLayer(dx, dy);
         return;
       }
-      if (ctrl && key === 'j') {
+
+      // ---- Brush size / hardness ----
+      if (key === '[') { e.preventDefault(); s.setTool(e.shiftKey ? { brushHardness: Math.max(0, s.tool.brushHardness - 10) } : { brushSize: Math.max(1, s.tool.brushSize - 2) }); return; }
+      if (key === ']') { e.preventDefault(); s.setTool(e.shiftKey ? { brushHardness: Math.min(100, s.tool.brushHardness + 10) } : { brushSize: Math.min(500, s.tool.brushSize + 2) }); return; }
+
+      // ---- Number keys: opacity / flow ----
+      if (!ctrl && !e.altKey && /^[0-9]$/.test(e.key)) {
+        const n = parseInt(e.key, 10);
+        const value = n === 0 ? 100 : n * 10;
         e.preventDefault();
-        const p = s.projects.find((p: any) => p.id === s.activeProjectId);
-        if (p?.activeLayerId) s.duplicateLayer(p.activeLayerId);
+        s.setTool(e.shiftKey ? { brushFlow: value } : { brushOpacity: value });
         return;
       }
-      if (key === 'f' && !ctrl) { s.toggleFullscreen(); return; }
-      if (key === 'enter' || key === 'return') {
-        if (s.transform?.active) s.applyTransform();
-        if (s.crop?.active) s.applyCrop();
-        return;
-      }
-      if (key === 'escape') {
-        if (s.transform?.active) s.cancelTransform();
-        if (s.crop?.active) s.cancelCrop();
-        s.setCommandPaletteOpen(false);
-        s.setDialog(null);
-        return;
-      }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const p = s.projects.find((p: any) => p.id === s.activeProjectId);
-        if (p?.activeLayerId) s.deleteLayer(p.activeLayerId);
-        return;
-      }
+
+      // ---- Tool shortcuts (repeat the key to cycle the group) ----
       if (!ctrl && !e.altKey && key.length === 1) {
-        const map: Record<string, any> = { v: 'move', m: 'marquee', l: 'lasso', w: 'magic', b: 'brush', e: 'eraser', g: 'fill', i: 'eyedropper', u: 'shape', t: 'text', s: 'clone', r: 'blur', h: 'hand', z: 'zoom', c: 'crop' };
-        if (map[key]) { e.preventDefault(); s.setToolId(map[key]); }
+        const groups: Record<string, any[]> = {
+          v: ['move'], m: ['marquee'], l: ['lasso'], w: ['magic'], c: ['crop'],
+          i: ['eyedropper'], b: ['brush'], e: ['eraser'], g: ['fill', 'gradient'],
+          u: ['shape'], t: ['text'], s: ['clone'], r: ['blur'], h: ['hand'], z: ['zoom'],
+        };
+        const group = groups[key];
+        if (group) {
+          e.preventDefault();
+          let next = group[0];
+          if (group.length > 1) {
+            const cur = group.indexOf(s.tool.id);
+            next = cur === -1 ? group[0] : group[(cur + 1) % group.length];
+          }
+          s.setToolId(next);
+        }
       }
-      if (key === '[') s.setTool({ brushSize: Math.max(1, s.tool.brushSize - 2) });
-      if (key === ']') s.setTool({ brushSize: Math.min(500, s.tool.brushSize + 2) });
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -551,6 +813,23 @@ export default function CanvasViewport() {
 
   return (
     <div className="canvas-area" ref={containerRef}>
+      {/* Rulers: drag out of a ruler to create a guide */}
+      {store.showRulers && (
+        <>
+          <canvas
+            ref={rulerHRef}
+            style={{ position: 'absolute', top: 0, left: 0, zIndex: 6, cursor: 'row-resize' }}
+            onMouseDown={startGuideDrag('horizontal')}
+            title={t('sc.guides')}
+          />
+          <canvas
+            ref={rulerVRef}
+            style={{ position: 'absolute', top: 0, left: 0, zIndex: 6, cursor: 'col-resize' }}
+            onMouseDown={startGuideDrag('vertical')}
+            title={t('sc.guides')}
+          />
+        </>
+      )}
       <div className="canvas-wrapper" style={{ transform: `translate(${activeProject.panX}px, ${activeProject.panY}px)` }}>
         <canvas
           ref={canvasRef}

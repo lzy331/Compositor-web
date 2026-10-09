@@ -134,6 +134,8 @@ interface StoreActions {
   setLayerBlendMode: (id: string, mode: BlendMode) => void;
   renameLayer: (id: string, name: string) => void;
   mergeDown: () => void;
+  mergeVisible: () => void;
+  selectLayerRelative: (delta: number) => void;
   addLayerMask: (layerId: string) => void;
 
   // Tool management
@@ -142,6 +144,9 @@ interface StoreActions {
 
   // Selection
   setSelection: (sel: Selection | null) => void;
+  reselect: () => void;
+  fillSelection: (mode: 'foreground' | 'background') => void;
+  clearSelectionPixels: () => void;
 
   // History
   pushHistory: (description: string) => void;
@@ -152,6 +157,7 @@ interface StoreActions {
   togglePanel: (panel: 'layers' | 'properties' | 'history') => void;
   toggleRulers: () => void;
   toggleGrid: () => void;
+  toggleGuides: () => void;
   setGridSize: (size: number) => void;
   toggleFullscreen: () => void;
   toggleNavigator: () => void;
@@ -218,11 +224,13 @@ export const useEditorStore = create<AppState & StoreActions>()(
     activeProjectId: null,
     tool: defaultToolState(),
     selection: null,
+    lastSelection: null,
     history: [],
     historyIndex: -1,
     clipboard: null,
     showRulers: true,
     showGrid: false,
+    showGuides: true,
     gridSize: 50,
     fullscreen: false,
     showNavigator: false,
@@ -434,6 +442,87 @@ export const useEditorStore = create<AppState & StoreActions>()(
       p.activeLayerId = bottom.id;
     }),
 
+    mergeVisible: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      const visible = p.layers.filter((l: any) => l.visible && (l.type === 'pixel' || l.type === 'text' || l.type === 'shape' || l.type === 'gradient'));
+      if (visible.length < 1) return;
+      const merged = createCanvas(p.width, p.height);
+      const mctx = merged.getContext('2d')!;
+      for (const layer of p.layers) {
+        if (!layer.visible) continue;
+        mctx.save();
+        mctx.globalAlpha = layer.opacity / 100;
+        const cx = layer.x + layer.width / 2;
+        const cy = layer.y + layer.height / 2;
+        mctx.translate(cx, cy);
+        mctx.rotate(((layer.rotation || 0) * Math.PI) / 180);
+        mctx.scale((layer.scaleX || 1) * (layer.flippedH ? -1 : 1), (layer.scaleY || 1) * (layer.flippedV ? -1 : 1));
+        mctx.translate(-layer.width / 2, -layer.height / 2);
+        if (layer.canvas) {
+          mctx.drawImage(layer.canvas as HTMLCanvasElement, 0, 0);
+        } else if (layer.type === 'text' && layer.text) {
+          mctx.font = `${layer.fontSize || 24}px ${layer.fontFamily || 'Arial'}`;
+          mctx.fillStyle = layer.textColor || '#000000';
+          mctx.textAlign = (layer.textAlign || 'left') as CanvasTextAlign;
+          mctx.textBaseline = 'top';
+          const lines = layer.text.split('\n');
+          const lh = (layer.fontSize || 24) * 1.2;
+          let sx = 0;
+          if (layer.textAlign === 'center') sx += layer.width / 2;
+          else if (layer.textAlign === 'right') sx += layer.width;
+          lines.forEach((line: string, i: number) => mctx.fillText(line, sx, i * lh));
+        } else if (layer.type === 'shape') {
+          mctx.fillStyle = layer.shapeFill || '#3b82f6';
+          if (layer.shapeType === 'ellipse') {
+            mctx.beginPath();
+            mctx.ellipse(layer.width / 2, layer.height / 2, layer.width / 2, layer.height / 2, 0, 0, Math.PI * 2);
+            mctx.fill();
+          } else {
+            mctx.fillRect(0, 0, layer.width, layer.height);
+          }
+        } else if (layer.type === 'gradient' && layer.gradient) {
+          const g = mctx.createLinearGradient(0, 0, layer.width, layer.height);
+          layer.gradient.colors.forEach((c: any) => g.addColorStop(c.stop, c.color));
+          mctx.fillStyle = g;
+          mctx.fillRect(0, 0, layer.width, layer.height);
+        }
+        mctx.restore();
+      }
+      const mergedLayer: LayerData = {
+        id: uid(),
+        name: 'Merged',
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        canvas: merged,
+        x: 0,
+        y: 0,
+        width: p.width,
+        height: p.height,
+        mask: null,
+        maskEnabled: false,
+        type: 'pixel',
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        flippedH: false,
+        flippedV: false,
+      };
+      p.layers = [mergedLayer];
+      p.activeLayerId = mergedLayer.id;
+    }),
+
+    selectLayerRelative: (delta) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      const idx = p.layers.findIndex((l: any) => l.id === p.activeLayerId);
+      if (idx === -1) return;
+      const next = Math.max(0, Math.min(p.layers.length - 1, idx + delta));
+      p.activeLayerId = p.layers[next].id;
+    }),
+
     addLayerMask: (layerId) => set((state: any) => {
       const p = state.projects.find((p: any) => p.id === state.activeProjectId);
       const layer = p?.layers.find((l: any) => l.id === layerId);
@@ -453,7 +542,48 @@ export const useEditorStore = create<AppState & StoreActions>()(
 
     setToolId: (id) => set((state: any) => { state.tool.id = id; }),
 
-    setSelection: (sel) => set((state: any) => { state.selection = sel; }),
+    setSelection: (sel) => set((state: any) => {
+      state.selection = sel;
+      if (sel) state.lastSelection = sel;
+    }),
+
+    reselect: () => set((state: any) => {
+      if (state.lastSelection) state.selection = state.lastSelection;
+    }),
+
+    fillSelection: (mode) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.activeLayerId) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (!layer?.canvas) return;
+      const ctx = (layer.canvas as HTMLCanvasElement).getContext('2d');
+      if (!ctx) return;
+      const color = mode === 'foreground' ? state.tool.brushColor : '#ffffff';
+      const sel = state.selection;
+      ctx.save();
+      if (sel) {
+        ctx.beginPath();
+        ctx.rect(sel.x, sel.y, sel.width, sel.height);
+        ctx.clip();
+        ctx.fillStyle = color;
+        ctx.fillRect(sel.x, sel.y, sel.width, sel.height);
+      } else {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, layer.width, layer.height);
+      }
+      ctx.restore();
+    }),
+
+    clearSelectionPixels: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      const sel = state.selection;
+      if (!p || !sel) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (!layer?.canvas) return;
+      const ctx = (layer.canvas as HTMLCanvasElement).getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(sel.x, sel.y, sel.width, sel.height);
+    }),
 
     pushHistory: (description) => set((state: any) => {
       const p = state.projects.find((p: any) => p.id === state.activeProjectId);
@@ -508,6 +638,8 @@ export const useEditorStore = create<AppState & StoreActions>()(
     toggleRulers: () => set((state: any) => { state.showRulers = !state.showRulers; }),
 
     toggleGrid: () => set((state: any) => { state.showGrid = !state.showGrid; }),
+
+    toggleGuides: () => set((state: any) => { state.showGuides = !state.showGuides; }),
 
     setGridSize: (size) => set((state: any) => { state.gridSize = size; }),
 
