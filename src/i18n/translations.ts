@@ -146,6 +146,10 @@ export const en: Record<string, string> = {
   'prop.hsl': 'Hue / Saturation',
   'prop.hue': 'Hue',
   'prop.sat': 'Sat',
+  'prop.align': 'Align',
+  'prop.alignLeft': 'Align left',
+  'prop.alignCenter': 'Align center',
+  'prop.alignRight': 'Align right',
 
   // ---- History panel ----
   'history.empty': 'No history yet',
@@ -399,6 +403,10 @@ export const zh: Record<string, string> = {
   'prop.hsl': '色相 / 饱和度',
   'prop.hue': '色相',
   'prop.sat': '饱和度',
+  'prop.align': '对齐',
+  'prop.alignLeft': '左对齐',
+  'prop.alignCenter': '居中对齐',
+  'prop.alignRight': '右对齐',
 
   // ---- 历史记录面板 ----
   'history.empty': '暂无历史记录',

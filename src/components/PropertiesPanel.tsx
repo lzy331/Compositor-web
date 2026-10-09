@@ -45,22 +45,22 @@ export default function PropertiesPanel() {
           <div className="prop-row" style={{ marginBottom: 0 }}>
             <span className="prop-label">X</span>
             <input type="number" className="prop-input" value={Math.round(layer.x)}
-              onChange={(e) => { layer.x = parseInt(e.target.value) || 0; }} />
+              onChange={(e) => useEditorStore.getState().updateLayer(layer.id, { x: parseInt(e.target.value) || 0 })} />
           </div>
           <div className="prop-row" style={{ marginBottom: 0 }}>
             <span className="prop-label">Y</span>
             <input type="number" className="prop-input" value={Math.round(layer.y)}
-              onChange={(e) => { layer.y = parseInt(e.target.value) || 0; }} />
+              onChange={(e) => useEditorStore.getState().updateLayer(layer.id, { y: parseInt(e.target.value) || 0 })} />
           </div>
           <div className="prop-row" style={{ marginBottom: 0 }}>
             <span className="prop-label">W</span>
             <input type="number" className="prop-input" value={Math.round(layer.width)}
-              onChange={(e) => { layer.width = Math.max(1, parseInt(e.target.value) || 1); }} />
+              onChange={(e) => useEditorStore.getState().updateLayer(layer.id, { width: Math.max(1, parseInt(e.target.value) || 1) })} />
           </div>
           <div className="prop-row" style={{ marginBottom: 0 }}>
             <span className="prop-label">H</span>
             <input type="number" className="prop-input" value={Math.round(layer.height)}
-              onChange={(e) => { layer.height = Math.max(1, parseInt(e.target.value) || 1); }} />
+              onChange={(e) => useEditorStore.getState().updateLayer(layer.id, { height: Math.max(1, parseInt(e.target.value) || 1) })} />
           </div>
         </div>
         <div className="prop-row">
@@ -77,13 +77,30 @@ export default function PropertiesPanel() {
 
         {layer.type === 'text' && (
           <>
-            <div className="prop-row">
-              <span className="prop-label">{t('prop.text')}</span>
-              <input
+            <div className="prop-row" style={{ alignItems: 'flex-start' }}>
+              <span className="prop-label" style={{ paddingTop: 3 }}>{t('prop.text')}</span>
+              <textarea
+                key={layer.id}
                 className="prop-input"
+                rows={3}
+                style={{ resize: 'vertical', fontFamily: 'inherit' }}
                 value={layer.text || ''}
-                onChange={(e) => { layer.text = e.target.value; }}
+                onChange={(e) => useEditorStore.getState().updateTextLayer(layer.id, { text: e.target.value })}
               />
+            </div>
+            <div className="prop-row">
+              <span className="prop-label">{t('opt.font')}</span>
+              <select
+                className="prop-input"
+                value={layer.fontFamily || 'Arial'}
+                onChange={(e) => useEditorStore.getState().updateTextLayer(layer.id, { fontFamily: e.target.value })}
+              >
+                <option value="Arial">Arial</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+              </select>
             </div>
             <div className="prop-row">
               <span className="prop-label">{t('prop.size')}</span>
@@ -91,7 +108,7 @@ export default function PropertiesPanel() {
                 type="number"
                 className="prop-input"
                 value={layer.fontSize || 24}
-                onChange={(e) => { layer.fontSize = parseInt(e.target.value) || 12; }}
+                onChange={(e) => useEditorStore.getState().updateTextLayer(layer.id, { fontSize: parseInt(e.target.value) || 12 })}
               />
             </div>
             <div className="prop-row">
@@ -100,9 +117,29 @@ export default function PropertiesPanel() {
                 type="color"
                 className="color-swatch"
                 value={layer.textColor || '#000000'}
-                onChange={(e) => { layer.textColor = e.target.value; }}
+                onChange={(e) => useEditorStore.getState().updateTextLayer(layer.id, { textColor: e.target.value })}
                 style={{ width: 30, height: 22 }}
               />
+            </div>
+            <div className="prop-row">
+              <span className="prop-label">{t('prop.align')}</span>
+              <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+                {([['left', '⇤'], ['center', '⇔'], ['right', '⇥']] as const).map(([a, icon]) => (
+                  <button
+                    key={a}
+                    className="btn"
+                    title={a === 'left' ? t('prop.alignLeft') : a === 'center' ? t('prop.alignCenter') : t('prop.alignRight')}
+                    style={{
+                      flex: 1, fontSize: 12, padding: '3px',
+                      background: (layer.textAlign || 'left') === a ? '#3a5a8a' : '#333',
+                      borderColor: (layer.textAlign || 'left') === a ? '#4a7aba' : '#444',
+                    }}
+                    onClick={() => useEditorStore.getState().updateTextLayer(layer.id, { textAlign: a })}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -115,7 +152,7 @@ export default function PropertiesPanel() {
                 type="color"
                 className="color-swatch"
                 value={layer.shapeFill || '#3b82f6'}
-                onChange={(e) => { layer.shapeFill = e.target.value; }}
+                onChange={(e) => useEditorStore.getState().updateLayer(layer.id, { shapeFill: e.target.value })}
                 style={{ width: 30, height: 22 }}
               />
             </div>
@@ -126,7 +163,7 @@ export default function PropertiesPanel() {
                 className="prop-input"
                 value={layer.shapeStrokeWidth || 0}
                 min={0}
-                onChange={(e) => { layer.shapeStrokeWidth = parseInt(e.target.value) || 0; }}
+                onChange={(e) => useEditorStore.getState().updateLayer(layer.id, { shapeStrokeWidth: parseInt(e.target.value) || 0 })}
               />
             </div>
           </>

@@ -13,8 +13,8 @@ export default function Dialogs() {
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) useEditorStore.getState().setDialog(null); }}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         {dialog.type === 'new' && <NewDialog />}
-        {dialog.type === 'imageSize' && <SizeDialog titleKey="dlg.imageSize" />}
-        {dialog.type === 'canvasSize' && <SizeDialog titleKey="dlg.canvasSize" />}
+        {dialog.type === 'imageSize' && <SizeDialog titleKey="dlg.imageSize" mode="image" />}
+        {dialog.type === 'canvasSize' && <SizeDialog titleKey="dlg.canvasSize" mode="canvas" />}
         {dialog.type === 'levels' && <LevelsDialog />}
         {dialog.type === 'curves' && <CurvesDialog />}
         {dialog.type === 'hsl' && <HslDialog />}
@@ -60,7 +60,7 @@ function NewDialog() {
   );
 }
 
-function SizeDialog({ titleKey }: { titleKey: string }) {
+function SizeDialog({ titleKey, mode }: { titleKey: string; mode: 'image' | 'canvas' }) {
   const project = useEditorStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
   const [width, setWidth] = useState(project?.width ?? 800);
   const [height, setHeight] = useState(project?.height ?? 600);
@@ -80,7 +80,9 @@ function SizeDialog({ titleKey }: { titleKey: string }) {
       <div className="modal-actions">
         <button className="btn" onClick={closeDialog}>{t('dlg.cancel')}</button>
         <button className="btn btn-primary" onClick={() => {
-          useEditorStore.getState().resizeCanvas(width, height);
+          const s = useEditorStore.getState();
+          if (mode === 'image') s.resizeImage(width, height);
+          else s.resizeCanvas(width, height);
           closeDialog();
         }}>{t('dlg.apply')}</button>
       </div>

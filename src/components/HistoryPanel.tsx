@@ -15,16 +15,7 @@ export default function HistoryPanel() {
   const entries = [...history].reverse();
 
   const jumpTo = (originalIndex: number) => {
-    const s = useEditorStore.getState();
-    const entry = s.history[originalIndex];
-    if (!entry) return;
-    useEditorStore.setState((state: any) => {
-      state.historyIndex = originalIndex;
-      const p = state.projects.find((pr: any) => pr.id === state.activeProjectId);
-      if (p) {
-        p.layers = entry.layers.map((l: any) => ({ ...l }));
-      }
-    });
+    useEditorStore.getState().jumpHistory(originalIndex);
   };
 
   return (

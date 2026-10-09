@@ -80,9 +80,9 @@ export default function CommandPalette() {
       { labelKey: 'cmd.addNoise', keywords: 'noise grain filter 杂色 噪点', run: () => applyToActiveLayer({ type: 'noise', params: { amount: 15, monochrome: false } }, 'Add Noise') },
       { labelKey: 'cmd.selectAll', keywords: 'select all selection 全选', run: () => { const p = getProject(); if (p) s.setSelection({ x: 0, y: 0, width: p.width, height: p.height, type: 'rect' }); } },
       { labelKey: 'cmd.deselect', keywords: 'deselect selection none 取消选择', run: () => s.setSelection(null) },
-      { labelKey: 'cmd.zoomIn', keywords: 'zoom in magnify 放大', run: () => { const p = getProject(); if (p) s.setZoom(Math.min(16, p.zoom * 1.25)); } },
-      { labelKey: 'cmd.zoomOut', keywords: 'zoom out 缩小', run: () => { const p = getProject(); if (p) s.setZoom(Math.max(0.05, p.zoom / 1.25)); } },
-      { labelKey: 'cmd.fitScreen', keywords: 'fit screen zoom reset 适合屏幕', run: () => s.setZoom(1) },
+      { labelKey: 'cmd.zoomIn', keywords: 'zoom in magnify 放大', run: () => s.zoomIn() },
+      { labelKey: 'cmd.zoomOut', keywords: 'zoom out 缩小', run: () => s.zoomOut() },
+      { labelKey: 'cmd.fitScreen', keywords: 'fit screen zoom reset 适合屏幕', run: () => s.fitToScreen() },
       { labelKey: 'cmd.toggleRulers', keywords: 'rulers toggle 标尺', run: () => s.toggleRulers() },
       { labelKey: 'cmd.toggleGrid', keywords: 'grid toggle 网格', run: () => s.toggleGrid() },
       { labelKey: 'cmd.fullscreen', keywords: 'fullscreen toggle 全屏', run: () => s.toggleFullscreen() },
@@ -171,20 +171,7 @@ function handleOpenFile() {
     if (!file) return;
     const img = new Image();
     img.onload = () => {
-      const s = useEditorStore.getState();
-      s.newProject(img.width, img.height, file.name.replace(/\.[^.]+$/, ''));
-      const p = s.projects[s.projects.length - 1];
-      const layer = p.layers[0];
-      if (layer.canvas) {
-        layer.canvas.width = img.width;
-        layer.canvas.height = img.height;
-        const ctx = layer.canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0);
-        layer.width = img.width;
-        layer.height = img.height;
-        p.width = img.width;
-        p.height = img.height;
-      }
+      useEditorStore.getState().openImage(file.name.replace(/\.[^.]+$/, ''), img);
     };
     img.src = URL.createObjectURL(file);
   };

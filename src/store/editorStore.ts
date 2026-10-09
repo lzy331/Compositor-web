@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type {
-  AppState, ProjectState, LayerData, ToolId, ToolState, Selection, BlendMode, Language,
+  AppState, ProjectState, LayerData, ToolId, ToolState, Selection, BlendMode, Language, CropState,
 } from '@/types';
 import { uid, createCanvas } from '@/engine/colorUtils';
+import { measureTextLayer } from '@/engine/textUtils';
 
 const LANG_STORAGE_KEY = 'compositor-web.lang';
 
@@ -161,6 +162,9 @@ interface StoreActions {
   // Canvas
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
+  fitToScreen: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
 
   // Clipboard
   copyLayer: (id: string) => void;
@@ -178,6 +182,7 @@ interface StoreActions {
   // Crop
   beginCrop: () => void;
   setCropRatio: (ratio: string | null) => void;
+  updateCrop: (patch: Partial<CropState>) => void;
   applyCrop: () => void;
   cancelCrop: () => void;
 
@@ -192,6 +197,19 @@ interface StoreActions {
   // Layer transform properties
   setLayerRotation: (layerId: string, rotation: number) => void;
   setLayerScale: (layerId: string, sx: number, sy: number) => void;
+
+  // Generic layer patching (use this instead of mutating layer objects directly,
+  // since Immer state is frozen and direct assignment throws at runtime).
+  updateLayer: (id: string, patch: Partial<LayerData>) => void;
+  updateTextLayer: (id: string, patch: Partial<LayerData>) => void;
+  nudgeLayer: (dx: number, dy: number) => void;
+
+  // History navigation
+  jumpHistory: (index: number) => void;
+
+  // Project size / image import
+  resizeImage: (width: number, height: number) => void;
+  openImage: (name: string, img: HTMLImageElement) => void;
 }
 
 export const useEditorStore = create<AppState & StoreActions>()(
@@ -282,6 +300,9 @@ export const useEditorStore = create<AppState & StoreActions>()(
         layer.fontFamily = 'Arial';
         layer.textColor = '#000000';
         layer.textAlign = 'left';
+        const m = measureTextLayer(layer);
+        layer.width = m.width;
+        layer.height = m.height;
       } else if (type === 'shape') {
         layer.shapeType = 'rect';
         layer.shapeFill = '#3b82f6';
@@ -500,6 +521,30 @@ export const useEditorStore = create<AppState & StoreActions>()(
       if (p) { p.panX = x; p.panY = y; }
     }),
 
+    fitToScreen: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.width || !p.height) return;
+      const el = typeof document !== 'undefined' ? document.querySelector('.canvas-area') : null;
+      const rect = el ? el.getBoundingClientRect() : null;
+      const availW = (rect?.width ?? 800) - 48;
+      const availH = (rect?.height ?? 600) - 48;
+      if (availW <= 0 || availH <= 0) return;
+      const z = Math.min(availW / p.width, availH / p.height);
+      p.zoom = Math.max(0.05, Math.min(16, z));
+      p.panX = 0;
+      p.panY = 0;
+    }),
+
+    zoomIn: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (p) p.zoom = Math.min(16, p.zoom * 1.25);
+    }),
+
+    zoomOut: () => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (p) p.zoom = Math.max(0.05, p.zoom / 1.25);
+    }),
+
     copyLayer: (id) => set((state: any) => {
       const p = state.projects.find((p: any) => p.id === state.activeProjectId);
       const layer = p?.layers.find((l: any) => l.id === id);
@@ -649,6 +694,10 @@ export const useEditorStore = create<AppState & StoreActions>()(
       if (state.crop) state.crop.ratio = ratio;
     }),
 
+    updateCrop: (patch) => set((state: any) => {
+      if (state.crop) Object.assign(state.crop, patch);
+    }),
+
     applyCrop: () => set((state: any) => {
       const p = state.projects.find((p: any) => p.id === state.activeProjectId);
       if (!p || !state.crop) return;
@@ -705,6 +754,108 @@ export const useEditorStore = create<AppState & StoreActions>()(
       const p = state.projects.find((p: any) => p.id === state.activeProjectId);
       const layer = p?.layers.find((l: any) => l.id === layerId);
       if (layer) { layer.scaleX = sx; layer.scaleY = sy; }
+    }),
+
+    updateLayer: (id, patch) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      const layer = p?.layers.find((l: any) => l.id === id);
+      if (layer) Object.assign(layer, patch);
+    }),
+
+    updateTextLayer: (id, patch) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      const layer = p?.layers.find((l: any) => l.id === id);
+      if (!layer || layer.type !== 'text') return;
+      Object.assign(layer, patch);
+      // Re-fit the bounding box to the (possibly new) text / font.
+      const m = measureTextLayer(layer);
+      layer.width = m.width;
+      layer.height = m.height;
+    }),
+
+    nudgeLayer: (dx, dy) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p || !p.activeLayerId) return;
+      const layer = p.layers.find((l: any) => l.id === p.activeLayerId);
+      if (layer) { layer.x += dx; layer.y += dy; }
+    }),
+
+    jumpHistory: (index) => set((state: any) => {
+      const entry = state.history[index];
+      if (!entry) return;
+      state.historyIndex = index;
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (p) p.layers = entry.layers.map((l: any) => ({ ...l }));
+    }),
+
+    resizeImage: (width, height) => set((state: any) => {
+      const p = state.projects.find((p: any) => p.id === state.activeProjectId);
+      if (!p) return;
+      const oldW = p.width || 1;
+      const oldH = p.height || 1;
+      const sx = width / oldW;
+      const sy = height / oldH;
+      for (const layer of p.layers) {
+        if (layer.canvas) {
+          const scaled = createCanvas(width, height);
+          scaled.getContext('2d')!.drawImage(layer.canvas as HTMLCanvasElement, 0, 0, oldW, oldH, 0, 0, width, height);
+          layer.canvas = scaled;
+        }
+        layer.x = Math.round(layer.x * sx);
+        layer.y = Math.round(layer.y * sy);
+        layer.width = Math.max(1, Math.round(layer.width * sx));
+        layer.height = Math.max(1, Math.round(layer.height * sy));
+        if (layer.type === 'text' && layer.fontSize) {
+          layer.fontSize = Math.max(1, Math.round(layer.fontSize * sy));
+        }
+      }
+      p.width = width;
+      p.height = height;
+    }),
+
+    openImage: (name, img) => set((state: any) => {
+      const w = img.width;
+      const h = img.height;
+      const canvas = createCanvas(w, h);
+      canvas.getContext('2d')!.drawImage(img, 0, 0);
+      const layer: LayerData = {
+        id: uid(),
+        name: 'Background',
+        visible: true,
+        locked: false,
+        opacity: 100,
+        blendMode: 'normal',
+        canvas,
+        x: 0,
+        y: 0,
+        width: w,
+        height: h,
+        mask: null,
+        maskEnabled: false,
+        type: 'pixel',
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        flippedH: false,
+        flippedV: false,
+      };
+      const project: ProjectState = {
+        id: uid(),
+        name,
+        width: w,
+        height: h,
+        background: '#ffffff',
+        layers: [layer],
+        activeLayerId: layer.id,
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+        guides: [],
+      };
+      state.projects.push(project);
+      state.activeProjectId = project.id;
+      state.history = [];
+      state.historyIndex = -1;
     }),
   }))
 );

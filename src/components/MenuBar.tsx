@@ -153,16 +153,14 @@ export default function MenuBar() {
       }
       case 'deselect': s.setSelection(null); break;
       case 'zoomIn': {
-        const p = s.projects.find(p => p.id === s.activeProjectId);
-        if (p) s.setZoom(Math.min(16, p.zoom * 1.25));
+        s.zoomIn();
         break;
       }
       case 'zoomOut': {
-        const p = s.projects.find(p => p.id === s.activeProjectId);
-        if (p) s.setZoom(Math.max(0.05, p.zoom / 1.25));
+        s.zoomOut();
         break;
       }
-      case 'fitScreen': s.setZoom(1); break;
+      case 'fitScreen': s.fitToScreen(); break;
       case 'toggleRulers': s.toggleRulers(); break;
       case 'toggleGrid': s.toggleGrid(); break;
       case 'toggleNavigator': s.toggleNavigator(); break;
@@ -256,8 +254,8 @@ export default function MenuBar() {
       case 'shortcuts': {
         const lang = useEditorStore.getState().language;
         alert(lang === 'zh'
-          ? '快捷键：\nV 移动  M 选框  L 套索  W 魔棒  C 裁剪  I 吸管\nB 画笔  E 橡皮  G 填充  U 形状  T 文字  S 仿制图章\nR 模糊  H 抓手  Z 缩放\n[ ] 调整画笔大小\nCtrl+Z 撤销  Ctrl+Shift+Z 重做\nCtrl+A 全选  Ctrl+D 取消选择  Ctrl+J 复制图层\nCtrl+F 命令面板  Ctrl+T 变换  F 全屏\n回车 应用变换/裁剪  Esc 取消'
-          : 'Shortcuts:\nV Move  M Marquee  L Lasso  W Magic Wand  C Crop  I Eyedropper\nB Brush  E Eraser  G Fill  U Shape  T Type  S Clone Stamp\nR Blur  H Hand  Z Zoom\n[ ] Adjust brush size\nCtrl+Z Undo  Ctrl+Shift+Z Redo\nCtrl+A Select All  Ctrl+D Deselect  Ctrl+J Duplicate Layer\nCtrl+F Command Palette  Ctrl+T Transform  F Fullscreen\nEnter Apply transform/crop  Esc Cancel');
+          ? '快捷键：\nV 移动  M 选框  L 套索  W 魔棒  C 裁剪  I 吸管\nB 画笔  E 橡皮  G 填充  U 形状  T 文字  S 仿制图章\nR 模糊  H 抓手  Z 缩放\n[ ] 调整画笔大小\n方向键 微调位置（Shift 10px）  空格 拖动画布\nCtrl+Z 撤销  Ctrl+Shift+Z 重做\nCtrl+A 全选  Ctrl+D 取消选择  Ctrl+J 复制图层\nCtrl+F 命令面板  Ctrl+T 变换  F 全屏\nCtrl+0 适合屏幕  Ctrl+加号/减号 缩放\n回车 应用变换/裁剪  Esc 取消'
+          : 'Shortcuts:\nV Move  M Marquee  L Lasso  W Magic Wand  C Crop  I Eyedropper\nB Brush  E Eraser  G Fill  U Shape  T Type  S Clone Stamp\nR Blur  H Hand  Z Zoom\n[ ] Adjust brush size\nArrow keys Nudge (Shift = 10px)  Space + drag to pan\nCtrl+Z Undo  Ctrl+Shift+Z Redo\nCtrl+A Select All  Ctrl+D Deselect  Ctrl+J Duplicate Layer\nCtrl+F Command Palette  Ctrl+T Transform  F Fullscreen\nCtrl+0 Fit to screen  Ctrl+Plus/Minus Zoom\nEnter Apply transform/crop  Esc Cancel');
         break;
       }
     }
@@ -272,20 +270,7 @@ export default function MenuBar() {
       if (!file) return;
       const img = new Image();
       img.onload = () => {
-        const s = useEditorStore.getState();
-        s.newProject(img.width, img.height, file.name.replace(/\.[^.]+$/, ''));
-        const p = s.projects[s.projects.length - 1];
-        const layer = p.layers[0];
-        if (layer.canvas) {
-          layer.canvas.width = img.width;
-          layer.canvas.height = img.height;
-          const ctx = layer.canvas.getContext('2d')!;
-          ctx.drawImage(img, 0, 0);
-          layer.width = img.width;
-          layer.height = img.height;
-          p.width = img.width;
-          p.height = img.height;
-        }
+        useEditorStore.getState().openImage(file.name.replace(/\.[^.]+$/, ''), img);
       };
       img.src = URL.createObjectURL(file);
     };

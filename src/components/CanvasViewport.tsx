@@ -17,6 +17,8 @@ export default function CanvasViewport() {
   const cloneSource = useRef<{ x: number; y: number } | null>(null);
   const lassoPoints = useRef<{ x: number; y: number }[]>([]);
   const gradientStart = useRef<{ x: number; y: number } | null>(null);
+  const cursorPos = useRef<{ x: number; y: number } | null>(null);
+  const spaceDown = useRef(false);
   const [, forceUpdate] = useState(0);
   const t = useT();
 
@@ -120,6 +122,22 @@ export default function CanvasViewport() {
       }
     }
 
+    // Brush outline cursor
+    if (cursorPos.current && ['brush', 'eraser', 'blur', 'clone'].includes(store.tool.id)) {
+      const r = Math.max(1, store.tool.brushSize / 2);
+      const lw = 1 / (activeProject.zoom || 1);
+      octx.save();
+      octx.beginPath();
+      octx.arc(cursorPos.current.x, cursorPos.current.y, r, 0, Math.PI * 2);
+      octx.strokeStyle = 'rgba(0,0,0,0.75)';
+      octx.lineWidth = lw * 2;
+      octx.stroke();
+      octx.strokeStyle = 'rgba(255,255,255,0.95)';
+      octx.lineWidth = lw;
+      octx.stroke();
+      octx.restore();
+    }
+
     // Transform handles (active layer bounding box)
     if (!store.crop?.active) {
       const layer = activeProject.layers.find(l => l.id === activeProject.activeLayerId);
@@ -191,7 +209,7 @@ export default function CanvasViewport() {
     const tool = store.tool;
     const layer = getActiveLayer();
 
-    if (tool.id === 'hand' || e.button === 1 || (e.button === 0 && e.altKey && tool.id !== 'clone')) {
+    if (tool.id === 'hand' || spaceDown.current || e.button === 1 || (e.button === 0 && e.altKey && tool.id !== 'clone')) {
       isDrawing.current = true; lastPos.current = { x: e.clientX, y: e.clientY }; return;
     }
     if (tool.id === 'zoom') {
@@ -230,10 +248,6 @@ export default function CanvasViewport() {
       isDrawing.current = true; lassoPoints.current = [pos]; lastPos.current = pos; return;
     }
     if (tool.id === 'move' && layer) {
-      // Check if clicking a transform handle
-      if (store.transform?.active) {
-        store.updateTransform('move', pos.x - store.transform.origX - (store.transform.origW / 2), pos.y - store.transform.origY - (store.transform.origH / 2));
-      }
       isDrawing.current = true; lastPos.current = pos; store.pushHistory('Move'); return;
     }
     if ((tool.id === 'marquee' || tool.id === 'shape' || tool.id === 'crop') && layer) {
@@ -248,11 +262,30 @@ export default function CanvasViewport() {
       drawBrushStroke(pos, pos); forceUpdate(n => n + 1); return;
     }
     if (tool.id === 'text') {
+      // Clicking inside an existing text layer selects it for editing
+      // instead of stacking a new one on top.
+      const p0 = activeProject!;
+      const hit = [...p0.layers].reverse().find(l =>
+        l.type === 'text' && l.visible &&
+        pos.x >= l.x && pos.x <= l.x + l.width &&
+        pos.y >= l.y && pos.y <= l.y + l.height
+      );
+      if (hit) {
+        store.selectLayer(hit.id);
+        forceUpdate(n => n + 1);
+        return;
+      }
       store.addLayer('text');
       const s = useEditorStore.getState();
       const p = s.projects.find(p => p.id === s.activeProjectId);
-      const nl = p?.layers.find(l => l.id === p?.activeLayerId);
-      if (nl) { nl.x = pos.x; nl.y = pos.y; nl.text = 'Text'; nl.fontSize = tool.fontSize; nl.fontFamily = tool.fontFamily; nl.textColor = tool.brushColor; nl.textAlign = tool.textAlign; }
+      const newId = p?.activeLayerId;
+      if (newId) {
+        s.updateTextLayer(newId, {
+          x: pos.x, y: pos.y, text: 'Text',
+          fontSize: tool.fontSize, fontFamily: tool.fontFamily,
+          textColor: tool.brushColor, textAlign: tool.textAlign,
+        });
+      }
       forceUpdate(n => n + 1); return;
     }
   }, [getCanvasPos, getActiveLayer, store, activeProject, drawBrushStroke]);
@@ -261,9 +294,21 @@ export default function CanvasViewport() {
     const pos = getCanvasPos(e);
     const tool = store.tool;
 
-    if (tool.id === 'hand' || (isDrawing.current && (e.buttons === 4 || (e.altKey && e.buttons === 1 && tool.id !== 'clone')))) {
+    // Track the brush outline cursor even when not actively drawing.
+    if (['brush', 'eraser', 'blur', 'clone'].includes(tool.id)) {
+      cursorPos.current = pos;
+      forceUpdate(n => n + 1);
+    } else if (cursorPos.current) {
+      cursorPos.current = null;
+      forceUpdate(n => n + 1);
+    }
+
+    if (tool.id === 'hand' || spaceDown.current || (isDrawing.current && (e.buttons === 4 || (e.altKey && e.buttons === 1 && tool.id !== 'clone')))) {
       if (lastPos.current) {
-        store.setPan(activeProject!.panX + (e.clientX - lastPos.current.x), activeProject!.panY + (e.clientY - lastPos.current.y));
+        // Read fresh state so multiple moves in one frame accumulate correctly.
+        const st = useEditorStore.getState();
+        const p = st.projects.find(pr => pr.id === st.activeProjectId);
+        if (p) st.setPan(p.panX + (e.clientX - lastPos.current.x), p.panY + (e.clientY - lastPos.current.y));
         lastPos.current = { x: e.clientX, y: e.clientY };
       }
       return;
@@ -271,9 +316,14 @@ export default function CanvasViewport() {
     if (!isDrawing.current) return;
 
     if (tool.id === 'move') {
-      const layer = getActiveLayer();
+      const st = useEditorStore.getState();
+      const p = st.projects.find(pr => pr.id === st.activeProjectId);
+      const layer = p?.layers.find(l => l.id === p.activeLayerId);
       if (layer && lastPos.current) {
-        layer.x += pos.x - lastPos.current.x; layer.y += pos.y - lastPos.current.y;
+        st.updateLayer(layer.id, {
+          x: layer.x + (pos.x - lastPos.current.x),
+          y: layer.y + (pos.y - lastPos.current.y),
+        });
         lastPos.current = pos; forceUpdate(n => n + 1);
       }
       return;
@@ -293,8 +343,7 @@ export default function CanvasViewport() {
           if (pos.x < startPos.current.x) x = startPos.current.x - w;
           if (pos.y < startPos.current.y) y = startPos.current.y - h;
         }
-        store.crop.x = Math.round(x); store.crop.y = Math.round(y);
-        store.crop.width = Math.max(10, Math.round(w)); store.crop.height = Math.max(10, Math.round(h));
+        store.updateCrop({ x: Math.round(x), y: Math.round(y), width: Math.max(10, Math.round(w)), height: Math.max(10, Math.round(h)) });
       } else {
         shapePreview.current = { x, y, w, h };
       }
@@ -370,8 +419,14 @@ export default function CanvasViewport() {
         store.addLayer('shape');
         const st = useEditorStore.getState();
         const p = st.projects.find(p => p.id === st.activeProjectId);
-        const nl = p?.layers.find(l => l.id === p?.activeLayerId);
-        if (nl) { nl.x = s.x; nl.y = s.y; nl.width = s.w; nl.height = s.h; nl.shapeType = tool.shapeType; nl.shapeFill = tool.shapeFill; nl.shapeStroke = tool.shapeStroke; nl.shapeStrokeWidth = tool.shapeStrokeWidth; }
+        const newId = p?.activeLayerId;
+        if (newId) {
+          st.updateLayer(newId, {
+            x: s.x, y: s.y, width: s.w, height: s.h,
+            shapeType: tool.shapeType, shapeFill: tool.shapeFill,
+            shapeStroke: tool.shapeStroke, shapeStrokeWidth: tool.shapeStrokeWidth,
+          });
+        }
       }
     }
 
@@ -390,15 +445,6 @@ export default function CanvasViewport() {
     }
   }, [store, activeProject]);
 
-  // Double-click on ruler area to add guide - handled via container
-  const handleContainerDoubleClick = useCallback((e: React.MouseEvent) => {
-    if (!activeProject || !store.showRulers) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    // Ruler area: top 20px or left 20px of the canvas wrapper area
-    // For simplicity: if near top edge add horizontal guide, near left add vertical
-  }, [activeProject, store.showRulers]);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -409,6 +455,10 @@ export default function CanvasViewport() {
       const ctrl = e.ctrlKey || e.metaKey;
 
       if (ctrl && key === 'f') { e.preventDefault(); s.setCommandPaletteOpen(true); return; }
+      if (ctrl && key === '0') { e.preventDefault(); s.fitToScreen(); return; }
+      if (ctrl && (key === '=' || key === '+')) { e.preventDefault(); s.zoomIn(); return; }
+      if (ctrl && key === '-') { e.preventDefault(); s.zoomOut(); return; }
+      if (key === ' ') { e.preventDefault(); spaceDown.current = true; return; }
       if (ctrl && key === 't') { e.preventDefault(); s.beginTransform(); return; }
       if (ctrl && key === 'z') { e.preventDefault(); e.shiftKey ? s.redo() : s.undo(); return; }
       if (ctrl && key === 'a') {
@@ -418,6 +468,16 @@ export default function CanvasViewport() {
         return;
       }
       if (ctrl && key === 'd') { e.preventDefault(); s.setSelection(null); return; }
+      // Arrow keys nudge the active layer (Shift = 10px)
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (s.crop?.active || s.transform?.active) return;
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+        s.nudgeLayer(dx, dy);
+        return;
+      }
       if (ctrl && key === 'j') {
         e.preventDefault();
         const p = s.projects.find((p: any) => p.id === s.activeProjectId);
@@ -453,30 +513,59 @@ export default function CanvasViewport() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Release spacebar pan
+  useEffect(() => {
+    const up = (e: KeyboardEvent) => { if (e.key === ' ') spaceDown.current = false; };
+    window.addEventListener('keyup', up);
+    return () => window.removeEventListener('keyup', up);
+  }, []);
+
+  // Double-click a text layer to edit it
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (!activeProject) return;
+    const pos = getCanvasPos(e);
+    const hit = [...activeProject.layers].reverse().find(l =>
+      l.type === 'text' && l.visible &&
+      pos.x >= l.x && pos.x <= l.x + l.width &&
+      pos.y >= l.y && pos.y <= l.y + l.height
+    );
+    if (hit) {
+      store.selectLayer(hit.id);
+      store.setToolId('text');
+      forceUpdate(n => n + 1);
+    }
+  }, [activeProject, getCanvasPos, store]);
+
   if (!activeProject) {
     return <div className="canvas-area"><div style={{ color: '#666', fontSize: 14 }}>{t('status.noProject')}</div></div>;
   }
 
   const displayWidth = activeProject.width * activeProject.zoom;
   const displayHeight = activeProject.height * activeProject.zoom;
+  const paintTool = ['brush', 'eraser', 'blur', 'clone'].includes(store.tool.id);
+  const panning = store.tool.id === 'hand' || spaceDown.current;
   const cursorClass =
     store.tool.id === 'move' ? 'tool-move' :
-    store.tool.id === 'hand' ? 'tool-hand' :
     store.tool.id === 'zoom' ? 'tool-zoom' :
     store.tool.id === 'eyedropper' ? 'tool-eyedropper' : '';
 
   return (
-    <div className="canvas-area" ref={containerRef} onDoubleClick={handleContainerDoubleClick}>
+    <div className="canvas-area" ref={containerRef}>
       <div className="canvas-wrapper" style={{ transform: `translate(${activeProject.panX}px, ${activeProject.panY}px)` }}>
         <canvas
           ref={canvasRef}
-          style={{ width: displayWidth, height: displayHeight }}
+          style={{
+            width: displayWidth,
+            height: displayHeight,
+            cursor: paintTool ? 'none' : panning ? 'grab' : undefined,
+          }}
           className={cursorClass}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={() => { handleMouseUp(); cursorPos.current = null; forceUpdate(n => n + 1); }}
           onWheel={handleWheel}
+          onDoubleClick={handleCanvasDoubleClick}
         />
         <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, width: displayWidth, height: displayHeight, pointerEvents: 'none' }} />
         {/* Crop confirm buttons */}
